@@ -23,212 +23,267 @@ interface RequestBody {
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
 ];
 
-// Extract price from Booking.com content using multiple strategies
-function extractPrice(content: string): number | null {
-  console.log('Attempting to extract price from content...');
+// Currency inference from URL path (e.g., /hotel/th/ -> THB)
+const ISO2_TO_CURRENCY: Record<string, string> = {
+  th: "THB", sg: "SGD", my: "MYR", id: "IDR", ph: "PHP", vn: "VND",
+  jp: "JPY", kr: "KRW", cn: "CNY", hk: "HKD", tw: "TWD", in: "INR",
+  us: "USD", gb: "GBP", au: "AUD", nz: "NZD", ca: "CAD",
+  de: "EUR", fr: "EUR", es: "EUR", it: "EUR", nl: "EUR", be: "EUR",
+};
 
-   const strong: number[] = [];
-   const weak: number[] = [];
-   const badCtx = ['breakfast', 'per person', 'per child', 'tax', 'fee', 'service', 'deposit', 'reviews', 'review', 'rating', 'score', 'points', 'meter', 'metre', 'm ', ' km', 'distance'];
-   const goodCtx = ['total', '1 night', 'per night', 'night', 'room', 'price', 'lowest', 'includes taxes', 'incl. taxes', 'taxes included'];
-  
-  // Strategy 1: Look for price in markdown format (from Firecrawl)
-  const markdownPricePatterns = [
-    /THB\s*฿?\s*([\d,]+)/gi,
-    /฿\s*([\d,]+)/g,
-    /(?:total|night|price|from|lowest)[\s\S]{0,80}?฿?\s*([\d,]+)/gi,
-  ];
-  
-  for (const pattern of markdownPricePatterns) {
-    const matches = content.matchAll(pattern);
-    for (const match of matches) {
-      const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
-       const price = parseInt(priceStr, 10);
-       if (!isNaN(price) && price > 500 && price < 50000) {
-        const idx = (match as any).index ?? content.indexOf(match[0]);
-        const ctx = content.slice(Math.max(0, idx - 60), Math.min(content.length, idx + 60)).toLowerCase();
-        if (badCtx.some(k => ctx.includes(k))) {
-          // skip breakfast/taxes/etc.
-        } else if (goodCtx.some(k => ctx.includes(k))) {
-          strong.push(price);
-        } else {
-          weak.push(price);
-        }
-      }
+function inferCurrency(url: string): string {
+  try {
+    const match = url.match(/\/hotel\/([a-z]{2})\//i);
+    if (match) {
+      const cc = match[1].toLowerCase();
+      return ISO2_TO_CURRENCY[cc] || "USD";
     }
+  } catch {
+    // ignore
   }
-  
-  // Strategy 2: Look for structured data patterns
-  const htmlPatterns = [
-    /data-hotel-rounded-price="(\d+)"/g,
-    /"priceBreakdown"[\s\S]{0,200}?"grossPrice"[\s\S]{0,50}?:\s*"?([\d,]+)"?/g,
-    /"value"[\s\S]{0,30}?:\s*"?([\d,]+)"?[\s\S]{0,60}?"currency"[\s\S]{0,30}?:\s*"THB"/g,
-  ];
-  
-  for (const pattern of htmlPatterns) {
-    const matches = content.matchAll(pattern);
-    for (const match of matches) {
-      const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
-       const price = parseInt(priceStr, 10);
-       if (!isNaN(price) && price > 500 && price < 50000) {
-        const idx = (match as any).index ?? content.indexOf(match[0]);
-        const ctx = content.slice(Math.max(0, idx - 60), Math.min(content.length, idx + 60)).toLowerCase();
-        if (badCtx.some(k => ctx.includes(k))) {
-          // skip breakfast/taxes/etc.
-        } else if (goodCtx.some(k => ctx.includes(k))) {
-          strong.push(price);
-        } else {
-          weak.push(price);
-        }
-      }
-    }
-  }
-
-   if (strong.length || weak.length) {
-     const all = (strong.length ? strong : weak).filter((p: number) => p >= 500 && p <= 50000).sort((a: number, b: number) => a - b);
-     if (!all.length) {
-       console.log('No valid prices after filtering');
-       return null;
-     }
-     
-     // If we have multiple prices, use median to avoid outliers
-     if (all.length >= 3) {
-       const median = all[Math.floor(all.length / 2)];
-       console.log(`Selected median price ${median} THB from ${all.length} candidates (strong=${strong.length}, weak=${weak.length})`);
-       return median;
-     }
-     
-     // If we have 2 prices and they're close, take the average
-     if (all.length === 2) {
-       const [a, b] = all;
-       const ratio = Math.max(a, b) / Math.min(a, b);
-       if (ratio < 2) {
-         const avg = Math.round((a + b) / 2);
-         console.log(`Selected average price ${avg} THB from 2 close candidates: ${a}, ${b}`);
-         return avg;
-       }
-       // If they're far apart, take the higher one (likely the room rate)
-       console.log(`Selected higher price ${b} THB from 2 distant candidates: ${a}, ${b}`);
-       return b;
-     }
-     
-     // Single price
-     console.log(`Selected only price ${all[0]} THB`);
-     return all[0];
-   }
-  
-  console.log('No valid price found in content');
-  return null;
+  return "USD";
 }
 
-// Scrape booking.com using Firecrawl when available, fallback to direct fetch
-async function scrapeBookingRate(url: string, checkInDate: string, firecrawlApiKey?: string): Promise<number | null> {
-  try {
-    const checkOutDate = new Date(checkInDate);
-    checkOutDate.setDate(checkOutDate.getDate() + 1);
-    const checkOut = checkOutDate.toISOString().split('T')[0];
+function cleanPriceToInt(text: string): number | null {
+  if (!text) return null;
+  const match = text.replace(/\s+/g, ' ').match(/(\d[\d\s.,]+)/);
+  if (!match) return null;
+  const digits = match[1].replace(/[^\d]/g, '');
+  return digits ? parseInt(digits, 10) : null;
+}
+
+function canonicalRoomName(name: string): string {
+  if (!name) return "";
+  // Remove capacity mentions
+  name = name.split(/\b(max\s*person|max\s*people|sleeps\s*\d+|guests?:\s*\d+)\b/i)[0];
+  return name.replace(/\s{2,}/g, ' ').trim();
+}
+
+function isPlausibleRoom(name: string): boolean {
+  if (!name) return false;
+  // Reject if it's just capacity text
+  if (/\b(max\s*person|max\s*people|sleeps|guests?)\b/i.test(name)) return false;
+  // Accept if it mentions room types
+  return /\b(room|suite|villa|studio|apartment|bungalow|loft|king|queen|twin|double|deluxe|superior|family|premier|executive|dormitory|bed)\b/i.test(name);
+}
+
+function roomKey(name: string): string {
+  return canonicalRoomName(name).toLowerCase().replace(/\s+/g, ' ');
+}
+
+function extractBestPairs(html: string): Array<[string, number]> {
+  const out: Array<[string, number]> = [];
+
+  // 1) Legacy table parsing
+  const tableMatch = html.match(/<table[^>]*id="hprt-table"[^>]*>([\s\S]*?)<\/table>/i);
+  if (tableMatch) {
+    const tableHtml = tableMatch[1];
+    const rowMatches = tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
     
-    // Build URL with query parameters
-    const urlObj = new URL(url);
-    urlObj.searchParams.set('checkin', checkInDate);
-    urlObj.searchParams.set('checkout', checkOut);
-    urlObj.searchParams.set('group_adults', '2');
-    urlObj.searchParams.set('no_rooms', '1');
-    urlObj.searchParams.set('selected_currency', 'THB');
-    urlObj.searchParams.set('sb_price_type', 'total');
-    
-    const targetUrl = urlObj.toString();
-
-    // Prefer Firecrawl if API key is configured
-    if (firecrawlApiKey) {
-      console.log(`Scraping with Firecrawl: ${targetUrl}`);
-      const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: targetUrl,
-          formats: ['markdown', 'html'],
-          onlyMainContent: false,
-          waitFor: 1200,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Normalize Firecrawl response shapes
-        const contents: string[] = [];
-        try {
-          if (typeof data.markdown === 'string') contents.push(data.markdown);
-          if (typeof data.html === 'string') contents.push(data.html);
-          if (data.data) {
-            if (typeof data.data.markdown === 'string') contents.push(data.data.markdown);
-            if (typeof data.data.html === 'string') contents.push(data.data.html);
-            if (Array.isArray(data.data)) {
-              for (const doc of data.data) {
-                if (typeof doc === 'string') contents.push(doc);
-                if (typeof doc?.markdown === 'string') contents.push(doc.markdown);
-                if (typeof doc?.html === 'string') contents.push(doc.html);
-                if (typeof doc?.content === 'string') contents.push(doc.content);
-              }
-            }
-          }
-          if (typeof data.content === 'string') contents.push(data.content);
-        } catch (e) {
-          console.warn('Could not normalize Firecrawl response:', e);
-        }
-
-        // Try to extract price from all available contents, pick the lowest plausible
-        const found: number[] = [];
-        for (const c of contents) {
-          const p = extractPrice(c);
-          if (p) found.push(p);
-        }
-
-        if (found.length) {
-          const best = Math.min(...found);
-          return best;
-        }
-        console.log('Firecrawl returned content but no price matched, falling back to direct fetch...');
-      } else {
-        const errorText = await response.text();
-        console.error(`Firecrawl API error: ${response.status} - ${errorText}`);
-        // fall through to direct fetch
+    for (const rowMatch of rowMatches) {
+      const row = rowMatch[1];
+      
+      let name = "";
+      // Try extracting room name
+      const nameMatch = row.match(/<a[^>]*class="[^"]*hprt-roomtype-link[^"]*"[^>]*>([\s\S]*?)<\/a>/i) ||
+                       row.match(/<span[^>]*class="[^"]*hprt-roomtype-icon-link[^"]*"[^>]*>([\s\S]*?)<\/span>/i) ||
+                       row.match(/<td[^>]*class="[^"]*hprt-roomtype-icon-and-name[^"]*"[^>]*>([\s\S]*?)<\/td>/i);
+      if (nameMatch) {
+        name = nameMatch[1].replace(/<[^>]+>/g, ' ').trim();
       }
-    } else {
-      console.warn('FIRECRAWL_API_KEY not configured, using direct fetch fallback');
+      
+      // Try data attribute for price
+      let price: number | null = null;
+      const priceAttrMatch = row.match(/data-hotel-rounded-price="(\d+)"/);
+      if (priceAttrMatch) {
+        price = parseInt(priceAttrMatch[1], 10);
+      }
+      
+      // Try price selectors
+      if (!price) {
+        const priceMatch = row.match(/<[^>]*data-testid="(price-and-discounted-price|price-for-x-nights)"[^>]*>([\s\S]*?)<\/[^>]+>/i) ||
+                          row.match(/<div[^>]*class="[^"]*hprt-price-price[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                          row.match(/<span[^>]*class="[^"]*bui-price-display__value[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+        if (priceMatch) {
+          price = cleanPriceToInt(priceMatch[2] || priceMatch[0]);
+        }
+      }
+      
+      name = canonicalRoomName(name);
+      if (name && isPlausibleRoom(name) && price) {
+        out.push([name, price]);
+      }
     }
+  }
 
-    // Fallback: Direct fetch (may be rate-limited by Booking.com)
-    const response = await fetch(targetUrl, {
+  // 2) Modern blocks
+  if (out.length === 0) {
+    const blockMatches = html.matchAll(/<[^>]*data-component="roomname"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
+    for (const blockMatch of blockMatches) {
+      const name = canonicalRoomName(blockMatch[1].replace(/<[^>]+>/g, ' ').trim());
+      if (!isPlausibleRoom(name)) continue;
+      
+      // Look for price near this block
+      const context = html.substring(Math.max(0, blockMatch.index! - 500), blockMatch.index! + 500);
+      const priceMatch = context.match(/<[^>]*data-testid="(price-and-discounted-price|price-for-x-nights)"[^>]*>([\s\S]*?)<\/[^>]+>/i);
+      if (priceMatch) {
+        const price = cleanPriceToInt(priceMatch[0]);
+        if (price) {
+          out.push([name, price]);
+        }
+      }
+    }
+  }
+
+  // 3) Fallback: find all prices and try to match with nearby room names
+  if (out.length === 0) {
+    const priceMatches = html.matchAll(/<[^>]*data-testid="(price-and-discounted-price|price-for-x-nights)"[^>]*>([\s\S]*?)<\/[^>]+>/gi);
+    for (const priceMatch of priceMatches) {
+      const price = cleanPriceToInt(priceMatch[0]);
+      if (!price) continue;
+      
+      const context = html.substring(Math.max(0, priceMatch.index! - 1000), priceMatch.index!);
+      const nameMatch = context.match(/<a[^>]*class="[^"]*hprt-roomtype-link[^"]*"[^>]*>([\s\S]*?)<\/a>/i) ||
+                       context.match(/<[^>]*data-component="roomname"[^>]*>([\s\S]*?)<\/[^>]+>/i);
+      if (nameMatch) {
+        const name = canonicalRoomName(nameMatch[1].replace(/<[^>]+>/g, ' ').trim());
+        if (isPlausibleRoom(name)) {
+          out.push([name, price]);
+        }
+      }
+    }
+  }
+
+  // Deduplicate: keep cheapest per room type
+  const bestPrice: Record<string, number> = {};
+  const displayName: Record<string, string> = {};
+  
+  for (const [name, price] of out) {
+    const key = roomKey(name);
+    if (!bestPrice[key] || price < bestPrice[key]) {
+      bestPrice[key] = price;
+      displayName[key] = name;
+    }
+  }
+
+  const pairs: Array<[string, number]> = Object.keys(bestPrice).map(k => [displayName[k], bestPrice[k]]);
+  pairs.sort((a, b) => a[1] - b[1]); // Sort by price ascending
+  return pairs;
+}
+
+async function scrapeDirectHTTP(url: string, checkInDate: string, adults: number): Promise<{ price: number | null, roomType: string | null }> {
+  const checkIn = checkInDate;
+  const checkOutDate = new Date(checkInDate);
+  checkOutDate.setDate(checkOutDate.getDate() + 1);
+  const checkOut = checkOutDate.toISOString().split('T')[0];
+
+  const currency = inferCurrency(url);
+  const params = new URLSearchParams({
+    checkin: checkIn,
+    checkout: checkOut,
+    group_adults: adults.toString(),
+    no_rooms: "1",
+    sb_price_type: "total",
+    selected_currency: currency,
+    do_availability_check: "1",
+    src: "hotel"
+  });
+
+  const fullUrl = `${url}?${params.toString()}`;
+  const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+
+  try {
+    console.log(`Direct HTTP fetch: ${fullUrl}`);
+    const response = await fetch(fullUrl, {
       headers: {
-        'User-Agent': USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-GB,en;q=0.9',
-        'Cache-Control': 'no-cache',
+        "User-Agent": userAgent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
       },
     });
 
-    if (response.status !== 200) {
-      console.log(`Direct fetch failed for ${targetUrl}: HTTP ${response.status}`);
-      return null;
+    if (!response.ok) {
+      console.log(`Direct fetch failed: HTTP ${response.status}`);
+      return { price: null, roomType: null };
     }
 
     const html = await response.text();
-    const price = extractPrice(html);
-    if (price) {
-      console.log(`Extracted price ${price} THB for ${checkInDate} using direct fetch`);
-    } else {
-      console.log(`No price found via direct fetch for ${checkInDate}`);
+    const pairs = extractBestPairs(html);
+    
+    if (pairs.length > 0) {
+      const [roomName, price] = pairs[0]; // Cheapest room
+      console.log(`Direct fetch found: ${roomName} at ${price} ${currency} (adults=${adults})`);
+      return { price, roomType: roomName };
     }
-    return price;
+
+    console.log(`Direct fetch: no prices found (adults=${adults})`);
+    return { price: null, roomType: null };
   } catch (error) {
-    console.error(`Error scraping ${url} for ${checkInDate}:`, error);
-    return null;
+    console.error(`Direct fetch error (adults=${adults}):`, error);
+    return { price: null, roomType: null };
+  }
+}
+
+async function scrapeWithFirecrawl(url: string, checkInDate: string, firecrawlApiKey: string, adults: number): Promise<{ price: number | null, roomType: string | null }> {
+  const checkIn = checkInDate;
+  const checkOutDate = new Date(checkInDate);
+  checkOutDate.setDate(checkOutDate.getDate() + 1);
+  const checkOut = checkOutDate.toISOString().split('T')[0];
+
+  const currency = inferCurrency(url);
+  const params = new URLSearchParams({
+    checkin: checkIn,
+    checkout: checkOut,
+    group_adults: adults.toString(),
+    no_rooms: "1",
+    sb_price_type: "total",
+    selected_currency: currency,
+    do_availability_check: "1",
+    src: "hotel"
+  });
+
+  const fullUrl = `${url}?${params.toString()}`;
+
+  try {
+    console.log(`Firecrawl fetch: ${fullUrl} (adults=${adults})`);
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${firecrawlApiKey}`,
+      },
+      body: JSON.stringify({
+        url: fullUrl,
+        formats: ['html'],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Firecrawl API error: ${response.status} - ${errorText}`);
+      return { price: null, roomType: null };
+    }
+
+    const result = await response.json();
+    if (result.success && result.data?.html) {
+      const pairs = extractBestPairs(result.data.html);
+      if (pairs.length > 0) {
+        const [roomName, price] = pairs[0];
+        console.log(`Firecrawl found: ${roomName} at ${price} ${currency} (adults=${adults})`);
+        return { price, roomType: roomName };
+      }
+    }
+
+    console.log(`Firecrawl: no prices found (adults=${adults})`);
+    return { price: null, roomType: null };
+  } catch (error) {
+    console.error(`Firecrawl error (adults=${adults}):`, error);
+    return { price: null, roomType: null };
   }
 }
 
@@ -282,69 +337,86 @@ const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY') || undefined;
       ...competitors.map(c => ({ ...c, isProperty: false }))
     ];
 
-    let completed = 0;
-    const total = allHotels.length * dates.length;
-
     // Scrape each hotel (property + competitors)
+    let completed = 0;
+    const total = allHotels.length * dates.length * 2; // x2 for adults 1 and 2
+
     for (const hotel of allHotels) {
       if (!hotel.url) {
         console.log(`Skipping ${hotel.name}: No URL provided`);
         continue;
       }
 
-      console.log(`Scraping ${hotel.name}...`);
+      console.log(`\nScraping ${hotel.name}...`);
       
       for (const checkInDate of dates) {
-        try {
-          console.log(`Scraping ${hotel.name} for ${checkInDate}...`);
-          const price = await scrapeBookingRate(hotel.url, checkInDate, firecrawlApiKey);
-          
-          if (price !== null) {
-            const checkOutDate = new Date(checkInDate);
-            checkOutDate.setDate(checkOutDate.getDate() + 1);
+        // Scrape for both adults=1 and adults=2
+        for (const adults of [1, 2]) {
+          try {
+            console.log(`Scraping ${hotel.name} for ${checkInDate} (adults=${adults})...`);
             
-            const rateData: any = {
-              check_in_date: checkInDate,
-              check_out_date: checkOutDate.toISOString().split('T')[0],
-              room_type: 'Standard Room',
-              price_amount: price,
-              currency: 'THB',
-              scraped_at: new Date().toISOString(),
-            };
-
-            // Set either competitor_id or property_id based on hotel type
-            if (hotel.isProperty) {
-              rateData.property_id = hotel.id;
-              rateData.competitor_id = null;
-            } else {
-              rateData.competitor_id = hotel.id;
-              rateData.property_id = null;
+            // Try direct HTTP first
+            let result = await scrapeDirectHTTP(hotel.url, checkInDate, adults);
+            
+            // Fallback to Firecrawl if direct failed
+            if (result.price === null && firecrawlApiKey) {
+              console.log(`Direct failed, trying Firecrawl (adults=${adults})...`);
+              result = await scrapeWithFirecrawl(hotel.url, checkInDate, firecrawlApiKey, adults);
             }
 
-            const { error: insertError } = await supabase
-              .from('scraped_rates')
-              .insert(rateData);
+            completed++;
+            const progress = Math.round((completed / total) * 100);
+            console.log(`Progress: ${progress}% (${completed}/${total})`);
 
-            if (insertError) {
-              console.error('Error inserting rate:', insertError);
+            if (result.price) {
+              const checkOutDate = new Date(checkInDate);
+              checkOutDate.setDate(checkOutDate.getDate() + 1);
+              const currency = inferCurrency(hotel.url);
+
+              const rateData: any = {
+                check_in_date: checkInDate,
+                check_out_date: checkOutDate.toISOString().split('T')[0],
+                room_type: result.roomType || 'Standard Room',
+                price_amount: result.price,
+                currency: currency,
+                adults: adults,
+                scraped_at: new Date().toISOString(),
+              };
+
+              // Set either competitor_id or property_id based on hotel type
+              if (hotel.isProperty) {
+                rateData.property_id = hotel.id;
+                rateData.competitor_id = null;
+              } else {
+                rateData.competitor_id = hotel.id;
+                rateData.property_id = null;
+              }
+
+              const { error: insertError } = await supabase
+                .from('scraped_rates')
+                .insert(rateData);
+
+              if (insertError) {
+                console.error(`Insert error for ${hotel.name} ${checkInDate} (adults=${adults}):`, insertError);
+              } else {
+                scrapedData.push({
+                  hotel: hotel.name,
+                  date: checkInDate,
+                  adults: adults,
+                  price: result.price,
+                });
+                console.log(`✓ Saved ${hotel.name} ${checkInDate}: ${result.price} ${currency} (adults=${adults})`);
+              }
             } else {
-              scrapedData.push({
-                hotel: hotel.name,
-                date: checkInDate,
-                price: price,
-              });
+              console.log(`✗ No price found for ${hotel.name} ${checkInDate} (adults=${adults})`);
             }
+            
+            // Small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (error) {
+            console.error(`Error scraping ${hotel.name} for ${checkInDate} (adults=${adults}):`, error);
+            completed++;
           }
-          
-          completed++;
-          const progress = Math.round((completed / total) * 100);
-          console.log(`Progress: ${progress}% (${completed}/${total})`);
-          
-          // Longer delay between requests to be respectful and ensure quality
-          await new Promise(resolve => setTimeout(resolve, 300));
-        } catch (error) {
-          console.error(`Error scraping ${hotel.name} for ${checkInDate}:`, error);
-          completed++;
         }
       }
     }

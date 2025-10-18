@@ -78,6 +78,7 @@ export type Database = {
       }
       scraped_rates: {
         Row: {
+          adults: number
           check_in_date: string
           check_out_date: string
           competitor_id: string | null
@@ -90,6 +91,7 @@ export type Database = {
           scraped_at: string
         }
         Insert: {
+          adults?: number
           check_in_date: string
           check_out_date: string
           competitor_id?: string | null
@@ -102,6 +104,7 @@ export type Database = {
           scraped_at?: string
         }
         Update: {
+          adults?: number
           check_in_date?: string
           check_out_date?: string
           competitor_id?: string | null
