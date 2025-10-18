@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { useProperty } from "@/contexts/PropertyContext";
 
 interface PricingData {
   date: string;
@@ -8,55 +9,16 @@ interface PricingData {
   occupancy: number;
   demand: number;
   myProperty: number | string;
-  competitors: Array<{
-    name: string;
-    price: number | string;
-    isSoldOut?: boolean;
-    isRecommended?: boolean;
-  }>;
+  competitorPrices: (number | string)[];
 }
 
+// Mock data for demonstration - in real app this would come from scraped_rates table
 const mockData: PricingData[] = [
-  { date: "05/10", day: "Sun", occupancy: 73, demand: 0, myProperty: 4031, competitors: [
-    { name: "Dust Thani Pattaya", price: "No flex" },
-    { name: "Amari Pattaya", price: "No flex" },
-    { name: "Mövenpick Siam", price: 6577 },
-    { name: "Centara Grand", price: "No flex" },
-    { name: "Cape Dara Resort", price: "No flex" },
-    { name: "Avani Pattaya", price: "No flex" },
-  ]},
-  { date: "18/10", day: "Sat", occupancy: 75, demand: 28, myProperty: 5515, competitors: [
-    { name: "Dust Thani Pattaya", price: "No flex", isRecommended: true },
-    { name: "Amari Pattaya", price: "No flex" },
-    { name: "Mövenpick Siam", price: 8060 },
-    { name: "Centara Grand", price: 9275 },
-    { name: "Cape Dara Resort", price: 14080 },
-    { name: "Avani Pattaya", price: "No flex" },
-  ]},
-  { date: "19/10", day: "Sun", occupancy: 61, demand: 17, myProperty: 4031, competitors: [
-    { name: "Dust Thani Pattaya", price: "No flex" },
-    { name: "Amari Pattaya", price: "No flex" },
-    { name: "Mövenpick Siam", price: 5706 },
-    { name: "Centara Grand", price: "No flex" },
-    { name: "Cape Dara Resort", price: 5440 },
-    { name: "Avani Pattaya", price: "No flex" },
-  ]},
-  { date: "22/10", day: "Wed", occupancy: 83, demand: 26, myProperty: 4820, competitors: [
-    { name: "Dust Thani Pattaya", price: 5885 },
-    { name: "Amari Pattaya", price: 10593 },
-    { name: "Mövenpick Siam", price: 7122 },
-    { name: "Centara Grand", price: 7156 },
-    { name: "Cape Dara Resort", price: 11520 },
-    { name: "Avani Pattaya", price: "Sold out", isSoldOut: true },
-  ]},
-  { date: "25/10", day: "Sat", occupancy: 87, demand: 46, myProperty: 4855, competitors: [
-    { name: "Dust Thani Pattaya", price: 6709 },
-    { name: "Amari Pattaya", price: 14830 },
-    { name: "Mövenpick Siam", price: 7651 },
-    { name: "Centara Grand", price: 15984 },
-    { name: "Cape Dara Resort", price: 8832 },
-    { name: "Avani Pattaya", price: 6958 },
-  ]},
+  { date: "05/10", day: "Sun", occupancy: 73, demand: 0, myProperty: 4031, competitorPrices: [] },
+  { date: "18/10", day: "Sat", occupancy: 75, demand: 28, myProperty: 5515, competitorPrices: [] },
+  { date: "19/10", day: "Sun", occupancy: 61, demand: 17, myProperty: 4031, competitorPrices: [] },
+  { date: "22/10", day: "Wed", occupancy: 83, demand: 26, myProperty: 4820, competitorPrices: [] },
+  { date: "25/10", day: "Sat", occupancy: 87, demand: 46, myProperty: 4855, competitorPrices: [] },
 ];
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -68,6 +30,27 @@ const getPriceClass = (price: number, myPrice: number) => {
 };
 
 export const PricingTable = () => {
+  const { selectedProperty, competitors } = useProperty();
+
+  if (!selectedProperty) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Please select a property to view rates
+      </div>
+    );
+  }
+
+  if (competitors.length === 0) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-muted-foreground mb-2">No competitors configured for this property</p>
+        <p className="text-sm text-muted-foreground">
+          Add competitors in the Competitors page to see pricing comparisons
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-auto">
       <table className="w-full border-collapse text-sm">
@@ -84,12 +67,12 @@ export const PricingTable = () => {
             </th>
             <th className="bg-primary/5 p-3 text-left font-medium">
               <div className="flex items-center gap-1">
-                Pullman Pattaya Hotel G
+                {selectedProperty.name}
                 <Badge variant="secondary" className="ml-2 text-xs">My Property</Badge>
               </div>
             </th>
-            {mockData[0].competitors.map((comp) => (
-              <th key={comp.name} className="p-3 text-left font-medium">{comp.name}</th>
+            {competitors.map((comp) => (
+              <th key={comp.id} className="p-3 text-left font-medium">{comp.name}</th>
             ))}
           </tr>
         </thead>
@@ -121,27 +104,11 @@ export const PricingTable = () => {
               <td className="bg-primary/5 p-3">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">฿ {row.myProperty.toLocaleString()}</span>
-                  {row.competitors.some(c => c.isRecommended) && (
-                    <TrendingDown className="h-4 w-4 text-success" />
-                  )}
                 </div>
               </td>
-              {row.competitors.map((comp, compIdx) => (
-                <td key={compIdx} className="p-3">
-                  {comp.isSoldOut ? (
-                    <span className="text-muted-foreground">{comp.price}</span>
-                  ) : typeof comp.price === 'number' ? (
-                    <div className="flex items-center gap-2">
-                      <span className={cn("font-medium", getPriceClass(comp.price, typeof row.myProperty === 'number' ? row.myProperty : 0))}>
-                        ฿ {comp.price.toLocaleString()}
-                      </span>
-                      {comp.price > (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
-                        <TrendingUp className="h-3 w-3 text-destructive" />
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">{comp.price}</span>
-                  )}
+              {competitors.map((comp) => (
+                <td key={comp.id} className="p-3">
+                  <span className="text-muted-foreground text-sm">No data</span>
                 </td>
               ))}
             </tr>

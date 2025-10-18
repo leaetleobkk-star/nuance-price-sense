@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { PropertySelector } from "@/components/PropertySelector";
 import { FilterBar } from "@/components/FilterBar";
 import { PricingTable } from "@/components/PricingTable";
+import { PropertyProvider } from "@/contexts/PropertyContext";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -20,11 +21,12 @@ const Index = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <PropertySelector />
-      <FilterBar />
-      <main className="p-6">
+    <PropertyProvider>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <PropertySelector />
+        <FilterBar />
+        <main className="p-6">
         <PricingTable />
         
         <div className="mt-6 rounded-lg border bg-card p-6 shadow-sm">
@@ -56,7 +58,8 @@ const Index = () => {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </PropertyProvider>
   );
 };
 
