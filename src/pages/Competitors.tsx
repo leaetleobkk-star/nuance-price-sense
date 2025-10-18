@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ExternalLink } from "lucide-react";
 
 interface Property {
   id: string;
@@ -31,6 +31,7 @@ const Competitors = () => {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string>("");
   const [newCompetitorName, setNewCompetitorName] = useState("");
+  const [newCompetitorUrl, setNewCompetitorUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -98,7 +99,7 @@ const Competitors = () => {
     const { error } = await supabase.from("competitors").insert({
       property_id: selectedPropertyId,
       name: newCompetitorName,
-      booking_url: null,
+      booking_url: newCompetitorUrl || null,
     });
 
     setIsLoading(false);
@@ -115,6 +116,7 @@ const Competitors = () => {
         description: "Competitor added successfully",
       });
       setNewCompetitorName("");
+      setNewCompetitorUrl("");
       fetchCompetitors(selectedPropertyId);
     }
   };
@@ -361,6 +363,17 @@ const Competitors = () => {
                       />
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="competitor-url">Booking.com URL (Optional)</Label>
+                      <Input
+                        id="competitor-url"
+                        type="url"
+                        placeholder="https://www.booking.com/hotel/..."
+                        value={newCompetitorUrl}
+                        onChange={(e) => setNewCompetitorUrl(e.target.value)}
+                      />
+                    </div>
+
                     <Button type="submit" className="w-full" disabled={isLoading}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Competitor
@@ -415,14 +428,46 @@ const Competitors = () => {
               </Card>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>My Property</CardTitle>
+                  <CardDescription>
+                    {selectedPropertyId && properties.find((p) => p.id === selectedPropertyId)?.name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedPropertyId && (() => {
+                    const property = properties.find((p) => p.id === selectedPropertyId);
+                    return (
+                      <div className="rounded-lg border p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium">{property?.name}</p>
+                            {property?.booking_url && (
+                              <a
+                                href={property.booking_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
+                              >
+                                View on Booking.com
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Configured Competitors</CardTitle>
                   <CardDescription>
-                    {selectedPropertyId
-                      ? properties.find((p) => p.id === selectedPropertyId)?.name
-                      : "Select a property"}
+                    {competitors.length} competitor{competitors.length !== 1 ? 's' : ''}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -439,6 +484,17 @@ const Competitors = () => {
                         >
                           <div className="flex-1">
                             <p className="font-medium">{competitor.name}</p>
+                            {competitor.booking_url && (
+                              <a
+                                href={competitor.booking_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
+                              >
+                                View on Booking.com
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
