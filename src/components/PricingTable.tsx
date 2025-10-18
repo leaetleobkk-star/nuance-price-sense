@@ -235,7 +235,8 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
       return <span className="text-muted-foreground text-[10px]">{detail.price}</span>;
     }
 
-    const hasSignificantChange = detail.percentChange && Math.abs(detail.percentChange) >= 10;
+    const hasHistoricalData = detail.previousPrice !== undefined;
+    const hasSignificantChange = hasHistoricalData && detail.percentChange && Math.abs(detail.percentChange) >= 10;
     const myPropertyPrice = typeof pricingData[0]?.myProperty.price === 'number' ? pricingData[0].myProperty.price : 0;
 
     const priceContent = (
