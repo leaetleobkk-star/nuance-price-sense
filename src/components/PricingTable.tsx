@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
 
 interface PricingData {
+  isoDate: string;
   date: string;
   day: string;
   myProperty: number | string;
@@ -15,7 +16,9 @@ interface PricingData {
 
 interface PricingTableProps {
   dateRange?: DateRange;
-  onDataLoaded?: (data: PricingData[]) => void;
+  onDataLoaded?: (data: any[]) => void;
+  updatedDates?: Set<string>;
+  pendingDates?: Set<string>;
 }
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -31,7 +34,7 @@ const getDayName = (dateStr: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => {
+export const PricingTable = ({ dateRange, onDataLoaded, updatedDates, pendingDates }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,17 +62,29 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
         dates.push(new Date(date).toISOString().split('T')[0]);
       }
 
-      // Fetch scraped rates for all competitors
-      const { data: rates, error } = await supabase
-        .from('scraped_rates')
-        .select('*')
-        .in('competitor_id', competitors.map(c => c.id))
-        .gte('check_in_date', dates[0])
-        .lte('check_in_date', dates[dates.length - 1])
-        .order('check_in_date');
+      // Fetch scraped rates for competitors and your property in parallel
+      const [compRes, myRes] = await Promise.all([
+        supabase
+          .from('scraped_rates')
+          .select('*')
+          .in('competitor_id', competitors.map(c => c.id))
+          .gte('check_in_date', dates[0])
+          .lte('check_in_date', dates[dates.length - 1])
+          .order('check_in_date'),
+        supabase
+          .from('scraped_rates')
+          .select('*')
+          .eq('property_id', selectedProperty.id)
+          .gte('check_in_date', dates[0])
+          .lte('check_in_date', dates[dates.length - 1])
+          .order('check_in_date'),
+      ]);
 
-      if (error) {
-        console.error('Error fetching rates:', error);
+      const rates = compRes.data;
+      const myRates = myRes.data;
+
+      if (compRes.error || myRes.error) {
+        console.error('Error fetching rates:', compRes.error || myRes.error);
         return;
       }
 
@@ -84,11 +99,13 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
           );
           competitorPrices[comp.id] = rate ? rate.price_amount : 'No data';
         });
+        const myRate = myRates?.find(r => r.property_id === selectedProperty.id && r.check_in_date === date);
 
         return {
+          isoDate: date,
           date: new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
           day: getDayName(date),
-          myProperty: 4500, // Mock data for now - would come from your property management system
+          myProperty: myRate ? Number(myRate.price_amount) : 'No data',
           competitorPrices,
         };
       });
@@ -155,7 +172,17 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
               <td className="sticky left-0 bg-background p-2">
                 <span className="text-[10px] text-muted-foreground">{row.day}</span>
               </td>
-              <td className="p-2 text-xs font-medium">{row.date}</td>
+              <td className="p-2 text-xs font-medium">
+                <div className="flex items-center gap-1.5">
+                  <span>{row.date}</span>
+                  {pendingDates?.has(row.isoDate) && (
+                    <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  )}
+                  {updatedDates?.has(row.isoDate) && (
+                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                  )}
+                </div>
+              </td>
               <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">

@@ -27,7 +27,12 @@ const IndexContent = () => {
     to: addDays(new Date(), 30),
   });
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
-
+  const [scrapingProgress, setScrapingProgress] = useState(0);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [pendingRefresh, setPendingRefresh] = useState<(() => void) | null>(null);
+  const [updatedDates, setUpdatedDates] = useState<Set<string>>(new Set());
+  const [pendingDates, setPendingDates] = useState<Set<string>>(new Set());
+  const [tableRefreshKey, setTableRefreshKey] = useState(0);
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -37,10 +42,6 @@ const IndexContent = () => {
     };
     checkAuth();
   }, [navigate]);
-
-  const [scrapingProgress, setScrapingProgress] = useState(0);
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
-  const [pendingRefresh, setPendingRefresh] = useState<(() => void) | null>(null);
 
   const performRefresh = async () => {
     if (!selectedProperty || competitors.length === 0) {
@@ -63,17 +64,26 @@ const IndexContent = () => {
 
     setIsRefreshing(true);
     setScrapingProgress(0);
+
+    // Build pending dates from selected range
+    const dates: string[] = [];
+    const start = new Date(dateRange.from);
+    const end = new Date(dateRange.to);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d).toISOString().split('T')[0]);
+    }
+    setPendingDates(new Set(dates));
     
     try {
       const { data, error } = await supabase.functions.invoke("scrape-rates", {
         body: {
           propertyId: selectedProperty.id,
           propertyName: selectedProperty.name,
-          propertyUrl: selectedProperty.booking_url,
+          propertyUrl: selectedProperty.booking_url?.replace(/\?$/, ''),
           competitors: competitors.map(c => ({
             id: c.id,
             name: c.name,
-            url: c.booking_url,
+            url: (c.booking_url || '').replace(/\?$/, ''),
           })),
           startDate: dateRange.from.toISOString().split('T')[0],
           endDate: dateRange.to.toISOString().split('T')[0],
@@ -82,14 +92,14 @@ const IndexContent = () => {
 
       if (error) throw error;
 
-      // Simulate progress updates
+      // Simulate progress updates while function runs
       const interval = setInterval(() => {
         setScrapingProgress(prev => {
           if (prev >= 100) {
             clearInterval(interval);
             return 100;
           }
-          return Math.min(prev + 10, 100);
+          return Math.min(prev + 8, 100);
         });
       }, 500);
 
@@ -100,15 +110,16 @@ const IndexContent = () => {
         });
       }
 
+      // Mark updated dates and refresh table
+      const completed = new Set<string>(Array.from(new Set((data?.data || []).map((r: any) => r.date))));
+      setUpdatedDates(completed);
+      setPendingDates(new Set());
+      setTableRefreshKey(k => k + 1);
+
       toast({
         title: "Success",
         description: `Scraped ${data?.data?.length || 0} rates successfully`,
       });
-      
-      // Reload the table data
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
     } catch (error) {
       console.error("Error refreshing rates:", error);
       toast({
@@ -285,7 +296,13 @@ const IndexContent = () => {
         </div>
       )}
         <main className="p-6">
-        <PricingTable dateRange={dateRange} onDataLoaded={setPricingData} />
+        <PricingTable 
+          key={tableRefreshKey}
+          dateRange={dateRange} 
+          onDataLoaded={setPricingData}
+          updatedDates={updatedDates}
+          pendingDates={pendingDates}
+        />
         
         <div className="mt-6 rounded-lg border bg-card p-4 shadow-sm">
           <h2 className="mb-3 text-base font-semibold">Price Recommendations</h2>
