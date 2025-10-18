@@ -7,12 +7,18 @@ import { FilterBar } from "@/components/FilterBar";
 import { PricingTable } from "@/components/PricingTable";
 import { PropertyProvider, useProperty } from "@/contexts/PropertyContext";
 import { useToast } from "@/hooks/use-toast";
+import { DateRange } from "react-day-picker";
+import { addDays } from "date-fns";
 
 const IndexContent = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedProperty, competitors } = useProperty();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: addDays(new Date(), 30),
+  });
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -34,16 +40,29 @@ const IndexContent = () => {
       return;
     }
 
+    if (!dateRange?.from || !dateRange?.to) {
+      toast({
+        title: "Select date range",
+        description: "Please select a date range to scrape rates",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsRefreshing(true);
     try {
       const { data, error } = await supabase.functions.invoke("scrape-rates", {
         body: {
           propertyId: selectedProperty.id,
+          propertyName: selectedProperty.name,
+          propertyUrl: selectedProperty.booking_url,
           competitors: competitors.map(c => ({
             id: c.id,
             name: c.name,
             url: c.booking_url,
           })),
+          startDate: dateRange.from.toISOString().split('T')[0],
+          endDate: dateRange.to.toISOString().split('T')[0],
         },
       });
 
@@ -69,9 +88,14 @@ const IndexContent = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <PropertySelector />
-      <FilterBar onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+      <FilterBar 
+        onRefresh={handleRefresh} 
+        isRefreshing={isRefreshing}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+      />
         <main className="p-6">
-        <PricingTable />
+        <PricingTable dateRange={dateRange} />
         
         <div className="mt-6 rounded-lg border bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold">Price Recommendations</h2>

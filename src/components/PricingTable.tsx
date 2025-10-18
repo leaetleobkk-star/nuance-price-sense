@@ -4,12 +4,17 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import { useProperty } from "@/contexts/PropertyContext";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DateRange } from "react-day-picker";
 
 interface PricingData {
   date: string;
   day: string;
   myProperty: number | string;
   competitorPrices: Record<string, number | string>;
+}
+
+interface PricingTableProps {
+  dateRange?: DateRange;
 }
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -25,30 +30,32 @@ const getDayName = (dateStr: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-export const PricingTable = () => {
+export const PricingTable = ({ dateRange }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (selectedProperty && competitors.length > 0) {
+    if (selectedProperty && competitors.length > 0 && dateRange?.from && dateRange?.to) {
       fetchPricingData();
     } else {
       setPricingData([]);
       setIsLoading(false);
     }
-  }, [selectedProperty, competitors]);
+  }, [selectedProperty, competitors, dateRange]);
 
   const fetchPricingData = async () => {
+    if (!dateRange?.from || !dateRange?.to) return;
+    
     setIsLoading(true);
     try {
-      // Generate dates for next 30 days
+      // Generate dates based on selected range
       const dates = [];
-      const today = new Date();
-      for (let i = 0; i < 30; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-        dates.push(date.toISOString().split('T')[0]);
+      const start = new Date(dateRange.from);
+      const end = new Date(dateRange.to);
+      
+      for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+        dates.push(new Date(date).toISOString().split('T')[0]);
       }
 
       // Fetch scraped rates for all competitors

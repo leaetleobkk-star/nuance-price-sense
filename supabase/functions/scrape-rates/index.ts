@@ -13,7 +13,11 @@ interface CompetitorInfo {
 
 interface RequestBody {
   propertyId: string;
+  propertyName: string;
+  propertyUrl: string | null;
   competitors: CompetitorInfo[];
+  startDate: string;
+  endDate: string;
 }
 
 Deno.serve(async (req) => {
@@ -27,18 +31,19 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { propertyId, competitors }: RequestBody = await req.json();
+    const { propertyId, propertyName, propertyUrl, competitors, startDate, endDate }: RequestBody = await req.json();
 
-    console.log('Starting rate scraping for property:', propertyId);
+    console.log('Starting rate scraping for property:', propertyName);
+    console.log('Date range:', startDate, 'to', endDate);
     console.log('Competitors to scrape:', competitors.length);
 
-    // Check dates to scrape (next 30 days)
+    // Calculate dates based on provided range
     const dates = [];
-    const today = new Date();
-    for (let i = 0; i < 30; i++) {
-      const checkInDate = new Date(today);
-      checkInDate.setDate(today.getDate() + i);
-      
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+      const checkInDate = new Date(date);
       const checkOutDate = new Date(checkInDate);
       checkOutDate.setDate(checkInDate.getDate() + 1); // 1 night stay
       
@@ -95,7 +100,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Scraped ${scrapedData.length} rates for ${competitors.length} competitors`,
+        message: `Scraped ${scrapedData.length} rates for ${competitors.length} competitors across ${dates.length} dates`,
         data: scrapedData,
       }),
       {
