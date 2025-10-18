@@ -2,24 +2,15 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useProperty } from "@/contexts/PropertyContext";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PricingData {
   date: string;
   day: string;
-  occupancy: number;
-  demand: number;
   myProperty: number | string;
-  competitorPrices: (number | string)[];
+  competitorPrices: Record<string, number | string>;
 }
-
-// Mock data for demonstration - in real app this would come from scraped_rates table
-const mockData: PricingData[] = [
-  { date: "05/10", day: "Sun", occupancy: 73, demand: 0, myProperty: 4031, competitorPrices: [] },
-  { date: "18/10", day: "Sat", occupancy: 75, demand: 28, myProperty: 5515, competitorPrices: [] },
-  { date: "19/10", day: "Sun", occupancy: 61, demand: 17, myProperty: 4031, competitorPrices: [] },
-  { date: "22/10", day: "Wed", occupancy: 83, demand: 26, myProperty: 4820, competitorPrices: [] },
-  { date: "25/10", day: "Sat", occupancy: 87, demand: 46, myProperty: 4855, competitorPrices: [] },
-];
 
 const getPriceClass = (price: number, myPrice: number) => {
   if (typeof price !== 'number' || typeof myPrice !== 'number') return "";
@@ -29,8 +20,78 @@ const getPriceClass = (price: number, myPrice: number) => {
   return "";
 };
 
+const getDayName = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { weekday: 'short' });
+};
+
 export const PricingTable = () => {
   const { selectedProperty, competitors } = useProperty();
+  const [pricingData, setPricingData] = useState<PricingData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (selectedProperty && competitors.length > 0) {
+      fetchPricingData();
+    } else {
+      setPricingData([]);
+      setIsLoading(false);
+    }
+  }, [selectedProperty, competitors]);
+
+  const fetchPricingData = async () => {
+    setIsLoading(true);
+    try {
+      // Generate dates for next 30 days
+      const dates = [];
+      const today = new Date();
+      for (let i = 0; i < 30; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        dates.push(date.toISOString().split('T')[0]);
+      }
+
+      // Fetch scraped rates for all competitors
+      const { data: rates, error } = await supabase
+        .from('scraped_rates')
+        .select('*')
+        .in('competitor_id', competitors.map(c => c.id))
+        .gte('check_in_date', dates[0])
+        .lte('check_in_date', dates[dates.length - 1])
+        .order('check_in_date');
+
+      if (error) {
+        console.error('Error fetching rates:', error);
+        return;
+      }
+
+      // Transform data into table format
+      const tableData: PricingData[] = dates.map(date => {
+        const competitorPrices: Record<string, number | string> = {};
+        
+        competitors.forEach(comp => {
+          const rate = rates?.find(r => 
+            r.competitor_id === comp.id && 
+            r.check_in_date === date
+          );
+          competitorPrices[comp.id] = rate ? rate.price_amount : 'No data';
+        });
+
+        return {
+          date: new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
+          day: getDayName(date),
+          myProperty: 4500, // Mock data for now - would come from your property management system
+          competitorPrices,
+        };
+      });
+
+      setPricingData(tableData);
+    } catch (error) {
+      console.error('Error in fetchPricingData:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!selectedProperty) {
     return (
@@ -51,6 +112,14 @@ export const PricingTable = () => {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Loading pricing data...
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-auto">
       <table className="w-full border-collapse text-sm">
@@ -58,18 +127,8 @@ export const PricingTable = () => {
           <tr className="border-b bg-muted/50">
             <th className="sticky left-0 bg-muted/50 p-3 text-left font-medium"></th>
             <th className="p-3 text-left font-medium">Date</th>
-            <th className="p-3 text-left font-medium">My OTB</th>
-            <th className="p-3 text-left font-medium">
-              <div className="flex items-center gap-1">
-                Market Demand
-                <TrendingUp className="h-3 w-3 text-muted-foreground" />
-              </div>
-            </th>
-            <th className="bg-primary/5 p-3 text-left font-medium">
-              <div className="flex items-center gap-1">
-                {selectedProperty.name}
-                <Badge variant="secondary" className="ml-2 text-xs">My Property</Badge>
-              </div>
+            <th className="bg-orange-50 dark:bg-orange-950/20 p-3 text-left font-medium">
+              {selectedProperty.name}
             </th>
             {competitors.map((comp) => (
               <th key={comp.id} className="p-3 text-left font-medium">{comp.name}</th>
@@ -77,40 +136,44 @@ export const PricingTable = () => {
           </tr>
         </thead>
         <tbody>
-          {mockData.map((row, idx) => (
+          {pricingData.map((row, idx) => (
             <tr
               key={idx}
-              className={cn(
-                "border-b transition-colors hover:bg-muted/30",
-                row.demand > 25 && "bg-accent/5"
-              )}
+              className="border-b transition-colors hover:bg-muted/30"
             >
               <td className="sticky left-0 bg-background p-3">
                 <span className="text-xs text-muted-foreground">{row.day}</span>
               </td>
               <td className="p-3 font-medium">{row.date}</td>
-              <td className="p-3">
+              <td className="bg-orange-50 dark:bg-orange-950/20 p-3">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{row.occupancy}%</span>
+                  <span className="font-semibold text-orange-600 dark:text-orange-400">
+                    ฿ {typeof row.myProperty === 'number' ? row.myProperty.toLocaleString() : row.myProperty}
+                  </span>
                 </div>
               </td>
-              <td className="p-3">
-                {row.demand > 0 && (
-                  <Badge variant="secondary" className="font-normal">
-                    {row.demand}%
-                  </Badge>
-                )}
-              </td>
-              <td className="bg-primary/5 p-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">฿ {row.myProperty.toLocaleString()}</span>
-                </div>
-              </td>
-              {competitors.map((comp) => (
-                <td key={comp.id} className="p-3">
-                  <span className="text-muted-foreground text-sm">No data</span>
-                </td>
-              ))}
+              {competitors.map((comp) => {
+                const price = row.competitorPrices[comp.id];
+                return (
+                  <td key={comp.id} className="p-3">
+                    {typeof price === 'number' ? (
+                      <div className="flex items-center gap-2">
+                        <span className={cn("font-medium", getPriceClass(price, typeof row.myProperty === 'number' ? row.myProperty : 0))}>
+                          ฿ {price.toLocaleString()}
+                        </span>
+                        {price > (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
+                          <TrendingUp className="h-3 w-3 text-destructive" />
+                        )}
+                        {price < (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
+                          <TrendingDown className="h-3 w-3 text-success" />
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">{price}</span>
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

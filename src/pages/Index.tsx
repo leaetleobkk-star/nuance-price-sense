@@ -1,14 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { PropertySelector } from "@/components/PropertySelector";
 import { FilterBar } from "@/components/FilterBar";
 import { PricingTable } from "@/components/PricingTable";
-import { PropertyProvider } from "@/contexts/PropertyContext";
+import { PropertyProvider, useProperty } from "@/contexts/PropertyContext";
+import { useToast } from "@/hooks/use-toast";
 
-const Index = () => {
+const IndexContent = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { selectedProperty, competitors } = useProperty();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -20,12 +24,52 @@ const Index = () => {
     checkAuth();
   }, [navigate]);
 
+  const handleRefresh = async () => {
+    if (!selectedProperty || competitors.length === 0) {
+      toast({
+        title: "Cannot refresh",
+        description: "Please select a property with competitors configured",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-rates", {
+        body: {
+          propertyId: selectedProperty.id,
+          competitors: competitors.map(c => ({
+            id: c.id,
+            name: c.name,
+            url: c.booking_url,
+          })),
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Rates refreshed successfully",
+      });
+    } catch (error) {
+      console.error("Error refreshing rates:", error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh rates",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
-    <PropertyProvider>
-      <div className="min-h-screen bg-background">
-        <Header />
-        <PropertySelector />
-        <FilterBar />
+    <div className="min-h-screen bg-background">
+      <Header />
+      <PropertySelector />
+      <FilterBar onRefresh={handleRefresh} isRefreshing={isRefreshing} />
         <main className="p-6">
         <PricingTable />
         
@@ -58,7 +102,14 @@ const Index = () => {
           </div>
         </div>
       </main>
-      </div>
+    </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <PropertyProvider>
+      <IndexContent />
     </PropertyProvider>
   );
 };

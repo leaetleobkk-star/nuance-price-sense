@@ -1,7 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Calendar, ChevronDown, Filter, RefreshCw, Download, BarChart3, Table2, Grid3x3 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export const FilterBar = () => {
+interface FilterBarProps {
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+}
+
+export const FilterBar = ({ onRefresh = () => {}, isRefreshing = false }: FilterBarProps) => {
   return (
     <div className="border-b bg-card px-6 py-4">
       <div className="flex items-center justify-between">
@@ -81,9 +87,9 @@ export const FilterBar = () => {
             <ChevronDown className="h-4 w-4" />
           </Button>
           
-          <Button size="sm" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Refresh rates
+          <Button size="sm" className="gap-2" onClick={onRefresh} disabled={isRefreshing}>
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            {isRefreshing ? "Refreshing..." : "Refresh rates"}
           </Button>
         </div>
       </div>
