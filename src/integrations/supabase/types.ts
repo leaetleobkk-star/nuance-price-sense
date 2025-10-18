@@ -80,33 +80,36 @@ export type Database = {
         Row: {
           check_in_date: string
           check_out_date: string
-          competitor_id: string
+          competitor_id: string | null
           created_at: string
           currency: string
           id: string
           price_amount: number
+          property_id: string | null
           room_type: string | null
           scraped_at: string
         }
         Insert: {
           check_in_date: string
           check_out_date: string
-          competitor_id: string
+          competitor_id?: string | null
           created_at?: string
           currency?: string
           id?: string
           price_amount: number
+          property_id?: string | null
           room_type?: string | null
           scraped_at?: string
         }
         Update: {
           check_in_date?: string
           check_out_date?: string
-          competitor_id?: string
+          competitor_id?: string | null
           created_at?: string
           currency?: string
           id?: string
           price_amount?: number
+          property_id?: string | null
           room_type?: string | null
           scraped_at?: string
         }
@@ -116,6 +119,13 @@ export type Database = {
             columns: ["competitor_id"]
             isOneToOne: false
             referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scraped_rates_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]
