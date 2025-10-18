@@ -38,7 +38,11 @@ const IndexContent = () => {
     checkAuth();
   }, [navigate]);
 
-  const handleRefresh = async () => {
+  const [scrapingProgress, setScrapingProgress] = useState(0);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [pendingRefresh, setPendingRefresh] = useState<(() => void) | null>(null);
+
+  const performRefresh = async () => {
     if (!selectedProperty || competitors.length === 0) {
       toast({
         title: "Cannot refresh",
@@ -58,6 +62,8 @@ const IndexContent = () => {
     }
 
     setIsRefreshing(true);
+    setScrapingProgress(0);
+    
     try {
       const { data, error } = await supabase.functions.invoke("scrape-rates", {
         body: {
@@ -76,20 +82,64 @@ const IndexContent = () => {
 
       if (error) throw error;
 
+      // Simulate progress updates
+      const interval = setInterval(() => {
+        setScrapingProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(interval);
+            return 100;
+          }
+          return Math.min(prev + 10, 100);
+        });
+      }, 500);
+
+      if (data?.hasRecentData) {
+        toast({
+          title: "Notice",
+          description: "This period was scraped recently. Data has been updated.",
+        });
+      }
+
       toast({
         title: "Success",
-        description: "Rates refreshed successfully",
+        description: `Scraped ${data?.data?.length || 0} rates successfully`,
       });
+      
+      // Reload the table data
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (error) {
       console.error("Error refreshing rates:", error);
       toast({
         title: "Error",
-        description: "Failed to refresh rates",
+        description: "Failed to refresh rates. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsRefreshing(false);
+      setScrapingProgress(0);
     }
+  };
+
+  const handleRefresh = async () => {
+    // Check if data exists for this period
+    if (dateRange?.from && dateRange?.to) {
+      const { data: existingData } = await supabase
+        .from('scraped_rates')
+        .select('id')
+        .gte('check_in_date', dateRange.from.toISOString().split('T')[0])
+        .lte('check_in_date', dateRange.to.toISOString().split('T')[0])
+        .limit(1);
+
+      if (existingData && existingData.length > 0) {
+        setShowDuplicateWarning(true);
+        setPendingRefresh(() => performRefresh);
+        return;
+      }
+    }
+
+    await performRefresh();
   };
 
   const calculateRecommendations = () => {
@@ -197,7 +247,43 @@ const IndexContent = () => {
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onExport={handleExportCSV}
+        scrapingProgress={scrapingProgress}
       />
+      
+      {/* Duplicate warning dialog */}
+      {showDuplicateWarning && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 max-w-md mx-4 shadow-xl border">
+            <h3 className="text-lg font-semibold mb-2">Data Already Exists</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Rates for this period have already been scraped. Do you want to update them with fresh data?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDuplicateWarning(false);
+                  setPendingRefresh(null);
+                }}
+                className="px-4 py-2 text-sm border rounded-md hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowDuplicateWarning(false);
+                  if (pendingRefresh) {
+                    pendingRefresh();
+                  }
+                  setPendingRefresh(null);
+                }}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+              >
+                Yes, Update Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         <main className="p-6">
         <PricingTable dateRange={dateRange} onDataLoaded={setPricingData} />
         

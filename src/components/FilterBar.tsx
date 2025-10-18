@@ -13,6 +13,7 @@ interface FilterBarProps {
   dateRange?: DateRange;
   onDateRangeChange?: (range: DateRange | undefined) => void;
   onExport?: () => void;
+  scrapingProgress?: number;
 }
 
 export const FilterBar = ({ 
@@ -21,6 +22,7 @@ export const FilterBar = ({
   dateRange,
   onDateRangeChange = () => {},
   onExport = () => {},
+  scrapingProgress = 0,
 }: FilterBarProps) => {
   return (
     <div className="border-b bg-card px-6 py-4">
@@ -74,15 +76,22 @@ export const FilterBar = ({
             Export
           </Button>
           
-          <Button 
-            size="sm" 
-            className="gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow-lg"
-            onClick={onRefresh} 
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-            {isRefreshing ? "Refreshing..." : "Refresh rates"}
-          </Button>
+          <div className="relative">
+            <Button 
+              size="sm" 
+              className="gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow-lg"
+              onClick={onRefresh} 
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+              {isRefreshing ? `Scraping... ${scrapingProgress}%` : "Refresh rates"}
+            </Button>
+            {isRefreshing && scrapingProgress > 0 && (
+              <div className="absolute bottom-0 left-0 h-1 bg-yellow-600 rounded-full transition-all duration-300"
+                style={{ width: `${scrapingProgress}%` }}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>
