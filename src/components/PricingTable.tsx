@@ -133,16 +133,16 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
 
   return (
     <div className="overflow-auto">
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="border-b bg-muted/50">
-            <th className="sticky left-0 bg-muted/50 p-3 text-left font-medium"></th>
-            <th className="p-3 text-left font-medium">Date</th>
-            <th className="bg-orange-50 dark:bg-orange-950/20 p-3 text-left font-medium">
+            <th className="sticky left-0 bg-muted/50 p-2 text-left text-xs font-medium"></th>
+            <th className="p-2 text-left text-xs font-medium">Date</th>
+            <th className="bg-orange-50 dark:bg-orange-950/20 p-2 text-left text-xs font-medium">
               {selectedProperty.name}
             </th>
             {competitors.map((comp) => (
-              <th key={comp.id} className="p-3 text-left font-medium">{comp.name}</th>
+              <th key={comp.id} className="p-2 text-left text-xs font-medium">{comp.name}</th>
             ))}
           </tr>
         </thead>
@@ -152,13 +152,13 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
               key={idx}
               className="border-b transition-colors hover:bg-muted/30"
             >
-              <td className="sticky left-0 bg-background p-3">
-                <span className="text-xs text-muted-foreground">{row.day}</span>
+              <td className="sticky left-0 bg-background p-2">
+                <span className="text-[10px] text-muted-foreground">{row.day}</span>
               </td>
-              <td className="p-3 font-medium">{row.date}</td>
-              <td className="bg-orange-50 dark:bg-orange-950/20 p-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-orange-600 dark:text-orange-400">
+              <td className="p-2 text-xs font-medium">{row.date}</td>
+              <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                     ฿ {typeof row.myProperty === 'number' ? row.myProperty.toLocaleString() : row.myProperty}
                   </span>
                 </div>
@@ -166,21 +166,21 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
               {competitors.map((comp) => {
                 const price = row.competitorPrices[comp.id];
                 return (
-                  <td key={comp.id} className="p-3">
+                  <td key={comp.id} className="p-2">
                     {typeof price === 'number' ? (
-                      <div className="flex items-center gap-2">
-                        <span className={cn("font-medium", getPriceClass(price, typeof row.myProperty === 'number' ? row.myProperty : 0))}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("text-xs font-medium", getPriceClass(price, typeof row.myProperty === 'number' ? row.myProperty : 0))}>
                           ฿ {price.toLocaleString()}
                         </span>
                         {price > (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
-                          <TrendingUp className="h-3 w-3 text-destructive" />
+                          <TrendingUp className="h-2.5 w-2.5 text-destructive" />
                         )}
                         {price < (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
-                          <TrendingDown className="h-3 w-3 text-success" />
+                          <TrendingDown className="h-2.5 w-2.5 text-success" />
                         )}
                       </div>
                     ) : (
-                      <span className="text-muted-foreground text-sm">{price}</span>
+                      <span className="text-muted-foreground text-[10px]">{price}</span>
                     )}
                   </td>
                 );

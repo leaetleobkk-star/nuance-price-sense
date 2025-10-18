@@ -57,17 +57,6 @@ export const FilterBar = ({
           
           <div className="h-6 w-px bg-border" />
           
-          <Button variant="outline" size="sm" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Best flex
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          
-          <Button variant="outline" size="sm" className="gap-2">
-            Booking.com
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          
           <Select defaultValue="2">
             <SelectTrigger className="h-9 w-[120px]">
               <SelectValue />
@@ -77,11 +66,6 @@ export const FilterBar = ({
               <SelectItem value="2">2 guests</SelectItem>
             </SelectContent>
           </Select>
-          
-          <Button variant="outline" size="sm" className="gap-2">
-            Any meal
-            <ChevronDown className="h-4 w-4" />
-          </Button>
         </div>
         
         <div className="flex items-center gap-2">

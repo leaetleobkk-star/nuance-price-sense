@@ -92,6 +92,51 @@ const IndexContent = () => {
     }
   };
 
+  const calculateRecommendations = () => {
+    if (pricingData.length === 0) {
+      return {
+        competitiveDays: 0,
+        optimizationDays: 0,
+        avgMarketRate: 0,
+      };
+    }
+
+    let competitiveDays = 0;
+    let optimizationDays = 0;
+    let totalMarketRate = 0;
+    let marketRateCount = 0;
+
+    pricingData.forEach(row => {
+      const myPrice = typeof row.myProperty === 'number' ? row.myProperty : 0;
+      if (myPrice === 0) return;
+
+      const competitorPrices = Object.values(row.competitorPrices)
+        .filter((p): p is number => typeof p === 'number');
+
+      if (competitorPrices.length === 0) return;
+
+      const avgCompPrice = competitorPrices.reduce((sum, p) => sum + p, 0) / competitorPrices.length;
+      totalMarketRate += avgCompPrice;
+      marketRateCount++;
+
+      const priceDiff = ((myPrice - avgCompPrice) / avgCompPrice) * 100;
+
+      if (priceDiff <= 10) {
+        competitiveDays++;
+      } else if (priceDiff > 10) {
+        optimizationDays++;
+      }
+    });
+
+    return {
+      competitiveDays,
+      optimizationDays,
+      avgMarketRate: marketRateCount > 0 ? Math.round(totalMarketRate / marketRateCount) : 0,
+    };
+  };
+
+  const recommendations = calculateRecommendations();
+
   const handleExportCSV = () => {
     if (!selectedProperty || pricingData.length === 0) {
       toast({
@@ -156,29 +201,31 @@ const IndexContent = () => {
         <main className="p-6">
         <PricingTable dateRange={dateRange} onDataLoaded={setPricingData} />
         
-        <div className="mt-6 rounded-lg border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">Price Recommendations</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border bg-success/5 p-4">
-              <div className="text-sm font-medium text-success">Competitive Advantage</div>
-              <div className="mt-2 text-2xl font-bold">18 days</div>
-              <div className="mt-1 text-sm text-muted-foreground">
+        <div className="mt-6 rounded-lg border bg-card p-4 shadow-sm">
+          <h2 className="mb-3 text-base font-semibold">Price Recommendations</h2>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border bg-success/5 p-3">
+              <div className="text-xs font-medium text-success">Competitive Advantage</div>
+              <div className="mt-1.5 text-xl font-bold">{recommendations.competitiveDays} days</div>
+              <div className="mt-1 text-xs text-muted-foreground">
                 Your pricing is competitive or better than the market
               </div>
             </div>
             
-            <div className="rounded-lg border bg-warning/5 p-4">
-              <div className="text-sm font-medium text-warning">Optimization Opportunities</div>
-              <div className="mt-2 text-2xl font-bold">8 days</div>
-              <div className="mt-1 text-sm text-muted-foreground">
+            <div className="rounded-lg border bg-warning/5 p-3">
+              <div className="text-xs font-medium text-warning">Optimization Opportunities</div>
+              <div className="mt-1.5 text-xl font-bold">{recommendations.optimizationDays} days</div>
+              <div className="mt-1 text-xs text-muted-foreground">
                 Consider adjusting prices to match market demand
               </div>
             </div>
             
-            <div className="rounded-lg border bg-accent/5 p-4">
-              <div className="text-sm font-medium text-accent">Average Market Rate</div>
-              <div className="mt-2 text-2xl font-bold">฿ 7,245</div>
-              <div className="mt-1 text-sm text-muted-foreground">
+            <div className="rounded-lg border bg-accent/5 p-3">
+              <div className="text-xs font-medium text-accent">Average Market Rate</div>
+              <div className="mt-1.5 text-xl font-bold">
+                {recommendations.avgMarketRate > 0 ? `฿ ${recommendations.avgMarketRate.toLocaleString()}` : 'N/A'}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
                 Average competitor pricing for this period
               </div>
             </div>
