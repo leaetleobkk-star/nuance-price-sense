@@ -57,7 +57,11 @@ export const Header = () => {
             >
               Competitors
             </Button>
-            <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
+            <Button 
+              variant="ghost" 
+              className={location.pathname === "/analytics" ? "bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
+              onClick={() => navigate("/analytics")}
+            >
               BI
             </Button>
           </nav>

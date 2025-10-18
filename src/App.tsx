@@ -7,6 +7,7 @@ import { PropertyProvider } from "@/contexts/PropertyContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Competitors from "./pages/Competitors";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/competitors" element={<Competitors />} />
+            <Route path="/analytics" element={<Analytics />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
