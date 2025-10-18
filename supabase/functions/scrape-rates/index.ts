@@ -174,6 +174,46 @@ function extractBestPairs(html: string): Array<[string, number]> {
   return pairs;
 }
 
+// --- Price plausibility helpers ---
+function minPriceByCurrency(currency: string): number {
+  switch (currency) {
+    case 'THB': return 800;
+    case 'USD': return 20;
+    case 'EUR': return 20;
+    case 'GBP': return 15;
+    case 'SGD': return 30;
+    case 'HKD': return 150;
+    case 'JPY': return 2000;
+    case 'KRW': return 20000;
+    case 'CNY': return 120;
+    case 'TWD': return 600;
+    case 'VND': return 200000;
+    case 'MYR': return 60;
+    case 'IDR': return 200000;
+    case 'PHP': return 800;
+    case 'AUD': return 30;
+    case 'NZD': return 30;
+    case 'CAD': return 25;
+    default: return 15; // sensible default
+  }
+}
+
+function filterPlausiblePairs(pairs: Array<[string, number]>, currency: string): Array<[string, number]> {
+  const min = minPriceByCurrency(currency);
+  const filtered = pairs.filter(([, price]) => typeof price === 'number' && price >= min);
+  if (filtered.length > 0) return filtered.sort((a, b) => a[1] - b[1]);
+
+  // Fallback: remove extreme outliers relative to median
+  if (pairs.length > 2) {
+    const prices = pairs.map(([, p]) => p).sort((a, b) => a - b);
+    const median = prices[Math.floor(prices.length / 2)];
+    const reasonable = pairs.filter(([, p]) => p >= Math.floor(median * 0.5));
+    return reasonable.sort((a, b) => a[1] - b[1]);
+  }
+  return [];
+}
+
+
 async function scrapeWithScrapingBee(url: string, checkInDate: string, scrapingBeeApiKey: string, adults: number): Promise<{ price: number | null, roomType: string | null }> {
   const checkIn = checkInDate;
   const checkOutDate = new Date(checkInDate);
@@ -223,14 +263,15 @@ async function scrapeWithScrapingBee(url: string, checkInDate: string, scrapingB
       if (response.status === 200) {
         const html = await response.text();
         const pairs = extractBestPairs(html);
+        const plausible = filterPlausiblePairs(pairs, currency);
         
-        if (pairs.length > 0) {
-          const [roomName, price] = pairs[0]; // Cheapest room
+        if (plausible.length > 0) {
+          const [roomName, price] = plausible[0]; // Cheapest plausible room
           console.log(`ScrapingBee found: ${roomName} at ${price} ${currency} (adults=${adults})`);
           return { price, roomType: roomName };
         }
 
-        console.log(`ScrapingBee: no prices found (adults=${adults})`);
+        console.log(`ScrapingBee: no plausible prices found (adults=${adults})`);
         return { price: null, roomType: null };
       }
 
@@ -297,14 +338,15 @@ async function scrapeDirectHTTP(url: string, checkInDate: string, adults: number
 
     const html = await response.text();
     const pairs = extractBestPairs(html);
+    const plausible = filterPlausiblePairs(pairs, currency);
     
-    if (pairs.length > 0) {
-      const [roomName, price] = pairs[0]; // Cheapest room
+    if (plausible.length > 0) {
+      const [roomName, price] = plausible[0]; // Cheapest plausible room
       console.log(`Direct fetch found: ${roomName} at ${price} ${currency} (adults=${adults})`);
       return { price, roomType: roomName };
     }
 
-    console.log(`Direct fetch: no prices found (adults=${adults})`);
+    console.log(`Direct fetch: no plausible prices found (adults=${adults})`);
     return { price: null, roomType: null };
   } catch (error) {
     console.error(`Direct fetch error (adults=${adults}):`, error);
@@ -355,8 +397,9 @@ async function scrapeWithFirecrawl(url: string, checkInDate: string, firecrawlAp
     const result = await response.json();
     if (result.success && result.data?.html) {
       const pairs = extractBestPairs(result.data.html);
-      if (pairs.length > 0) {
-        const [roomName, price] = pairs[0];
+      const plausible = filterPlausiblePairs(pairs, currency);
+      if (plausible.length > 0) {
+        const [roomName, price] = plausible[0];
         console.log(`Firecrawl found: ${roomName} at ${price} ${currency} (adults=${adults})`);
         return { price, roomType: roomName };
       }
@@ -368,6 +411,27 @@ async function scrapeWithFirecrawl(url: string, checkInDate: string, firecrawlAp
     console.error(`Firecrawl error (adults=${adults}):`, error);
     return { price: null, roomType: null };
   }
+}
+
+// Simple concurrency limiter for parallel scraping
+async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+  const results: T[] = [];
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (true) {
+      if (index >= tasks.length) break;
+      const current = tasks[index++];
+      try {
+        const r = await current();
+        // @ts-ignore - allow void tasks
+        results.push(r);
+      } catch (_) {
+        // errors are logged inside tasks
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 Deno.serve(async (req) => {
@@ -416,7 +480,7 @@ Deno.serve(async (req) => {
       dates.push(new Date(date).toISOString().split('T')[0]);
     }
 
-    const scrapedData = [];
+    const scrapedData: Array<{ hotel: string; date: string; adults: number; price: number }> = [];
     const allHotels = [
       { id: propertyId, name: propertyName, url: propertyUrl, isProperty: true },
       ...competitors.map(c => ({ ...c, isProperty: false }))
@@ -426,95 +490,96 @@ Deno.serve(async (req) => {
     let completed = 0;
     const total = allHotels.length * dates.length * 2; // x2 for adults 1 and 2
 
+    const CONCURRENCY_LIMIT = 5; // respect ScrapingBee concurrency allowance
+    const tasks: Array<() => Promise<void>> = [];
+
     for (const hotel of allHotels) {
       if (!hotel.url) {
         console.log(`Skipping ${hotel.name}: No URL provided`);
         continue;
       }
+      console.log(`\nQueueing ${hotel.name}...`);
 
-      console.log(`\nScraping ${hotel.name}...`);
-      
       for (const checkInDate of dates) {
-        // Scrape for both adults=1 and adults=2
         for (const adults of [1, 2]) {
-          try {
-            console.log(`Scraping ${hotel.name} for ${checkInDate} (adults=${adults})...`);
-            
-            let result = { price: null as number | null, roomType: null as string | null };
-            
-            // Priority 1: ScrapingBee (fastest and most reliable)
-            if (scrapingBeeApiKey) {
-              result = await scrapeWithScrapingBee(hotel.url, checkInDate, scrapingBeeApiKey, adults);
-            }
-            
-            // Priority 2: Direct HTTP fallback
-            if (result.price === null) {
-              console.log(`ScrapingBee failed, trying direct HTTP (adults=${adults})...`);
-              result = await scrapeDirectHTTP(hotel.url, checkInDate, adults);
-            }
-            
-            // Priority 3: Firecrawl fallback
-            if (result.price === null && firecrawlApiKey) {
-              console.log(`Direct failed, trying Firecrawl (adults=${adults})...`);
-              result = await scrapeWithFirecrawl(hotel.url, checkInDate, firecrawlApiKey, adults);
-            }
+          tasks.push(async () => {
+            try {
+              console.log(`Scraping ${hotel.name} for ${checkInDate} (adults=${adults})...`);
+              let result = { price: null as number | null, roomType: null as string | null };
 
-            completed++;
-            const progress = Math.round((completed / total) * 100);
-            console.log(`Progress: ${progress}% (${completed}/${total})`);
-
-            if (result.price) {
-              const checkOutDate = new Date(checkInDate);
-              checkOutDate.setDate(checkOutDate.getDate() + 1);
-              const currency = inferCurrency(hotel.url);
-
-              const rateData: any = {
-                check_in_date: checkInDate,
-                check_out_date: checkOutDate.toISOString().split('T')[0],
-                room_type: result.roomType || 'Standard Room',
-                price_amount: result.price,
-                currency: currency,
-                adults: adults,
-                scraped_at: new Date().toISOString(),
-              };
-
-              // Set either competitor_id or property_id based on hotel type
-              if (hotel.isProperty) {
-                rateData.property_id = hotel.id;
-                rateData.competitor_id = null;
-              } else {
-                rateData.competitor_id = hotel.id;
-                rateData.property_id = null;
+              // Priority 1: ScrapingBee (fastest and most reliable)
+              if (scrapingBeeApiKey) {
+                result = await scrapeWithScrapingBee(hotel.url, checkInDate, scrapingBeeApiKey, adults);
               }
 
-              const { error: insertError } = await supabase
-                .from('scraped_rates')
-                .insert(rateData);
+              // Priority 2: Direct HTTP fallback
+              if (result.price === null) {
+                console.log(`ScrapingBee failed, trying direct HTTP (adults=${adults})...`);
+                result = await scrapeDirectHTTP(hotel.url, checkInDate, adults);
+              }
 
-              if (insertError) {
-                console.error(`Insert error for ${hotel.name} ${checkInDate} (adults=${adults}):`, insertError);
-              } else {
-                scrapedData.push({
-                  hotel: hotel.name,
-                  date: checkInDate,
+              // Priority 3: Firecrawl fallback
+              if (result.price === null && firecrawlApiKey) {
+                console.log(`Direct failed, trying Firecrawl (adults=${adults})...`);
+                result = await scrapeWithFirecrawl(hotel.url, checkInDate, firecrawlApiKey, adults);
+              }
+
+              completed++;
+              const progress = Math.round((completed / total) * 100);
+              console.log(`Progress: ${progress}% (${completed}/${total})`);
+
+              if (result.price && result.price > 0) {
+                const checkOutDate = new Date(checkInDate);
+                checkOutDate.setDate(checkOutDate.getDate() + 1);
+                const currency = inferCurrency(hotel.url);
+
+                const rateData: any = {
+                  check_in_date: checkInDate,
+                  check_out_date: checkOutDate.toISOString().split('T')[0],
+                  room_type: result.roomType || 'Standard Room',
+                  price_amount: result.price,
+                  currency: currency,
                   adults: adults,
-                  price: result.price,
-                });
-                console.log(`✓ Saved ${hotel.name} ${checkInDate}: ${result.price} ${currency} (adults=${adults})`);
+                  scraped_at: new Date().toISOString(),
+                };
+
+                if (hotel.isProperty) {
+                  rateData.property_id = hotel.id;
+                  rateData.competitor_id = null;
+                } else {
+                  rateData.competitor_id = hotel.id;
+                  rateData.property_id = null;
+                }
+
+                const { error: insertError } = await supabase
+                  .from('scraped_rates')
+                  .insert(rateData);
+
+                if (insertError) {
+                  console.error(`Insert error for ${hotel.name} ${checkInDate} (adults=${adults}):`, insertError);
+                } else {
+                  scrapedData.push({
+                    hotel: hotel.name,
+                    date: checkInDate,
+                    adults: adults,
+                    price: result.price,
+                  });
+                  console.log(`✓ Saved ${hotel.name} ${checkInDate}: ${result.price} ${currency} (adults=${adults})`);
+                }
+              } else {
+                console.log(`✗ No price found for ${hotel.name} ${checkInDate} (adults=${adults})`);
               }
-            } else {
-              console.log(`✗ No price found for ${hotel.name} ${checkInDate} (adults=${adults})`);
+            } catch (error) {
+              console.error(`Error scraping ${hotel.name} for ${checkInDate} (adults=${adults}):`, error);
+              completed++;
             }
-            
-            // Minimal delay - ScrapingBee handles rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
-          } catch (error) {
-            console.error(`Error scraping ${hotel.name} for ${checkInDate} (adults=${adults}):`, error);
-            completed++;
-          }
+          });
         }
       }
     }
+
+    await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+
 
     console.log(`Successfully scraped ${scrapedData.length} rates`);
 
