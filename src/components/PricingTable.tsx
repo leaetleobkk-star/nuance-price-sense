@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { TrendingDown, TrendingUp, ExternalLink } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { useProperty } from "@/contexts/PropertyContext";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -230,7 +230,7 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
     );
   }
 
-  const renderPriceCell = (detail: RateDetail, bookingUrl: string | null, isMyProperty: boolean = false) => {
+  const renderPriceCell = (detail: RateDetail, isMyProperty: boolean = false) => {
     if (typeof detail.price === 'string') {
       return <span className="text-muted-foreground text-[10px]">{detail.price}</span>;
     }
@@ -238,94 +238,94 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
     const hasSignificantChange = detail.percentChange && Math.abs(detail.percentChange) >= 10;
     const myPropertyPrice = typeof pricingData[0]?.myProperty.price === 'number' ? pricingData[0].myProperty.price : 0;
 
-    return (
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className={cn(
-            "text-xs font-medium",
-            isMyProperty ? "font-semibold text-orange-600 dark:text-orange-400" : getPriceClass(detail.price, myPropertyPrice)
-          )}>
-            ฿ {detail.price.toLocaleString()}
-          </span>
-          {!isMyProperty && detail.price > myPropertyPrice && (
-            <TrendingUp className="h-2.5 w-2.5 text-destructive" />
-          )}
-          {!isMyProperty && detail.price < myPropertyPrice && (
-            <TrendingDown className="h-2.5 w-2.5 text-success" />
-          )}
-          {hasSignificantChange && (
-            <Badge 
-              variant="outline" 
-              className={cn(
-                "text-[9px] px-1 py-0 h-4",
-                detail.percentChange! > 0 ? "text-destructive border-destructive" : "text-success border-success"
-              )}
-            >
-              {detail.percentChange! > 0 ? '+' : ''}{detail.percentChange!.toFixed(1)}%
-            </Badge>
-          )}
-        </div>
-        {detail.roomType && (
-          <span className="text-[9px] text-muted-foreground truncate max-w-[120px]">
-            {detail.roomType}
-          </span>
+    const priceContent = (
+      <div className="flex items-center gap-1.5">
+        <span className={cn(
+          "text-xs font-medium",
+          isMyProperty ? "font-semibold text-orange-600 dark:text-orange-400" : getPriceClass(detail.price, myPropertyPrice)
+        )}>
+          ฿ {detail.price.toLocaleString()}
+        </span>
+        {!isMyProperty && detail.price > myPropertyPrice && (
+          <TrendingUp className="h-2.5 w-2.5 text-destructive" />
         )}
-        {bookingUrl && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-5 text-[9px] px-1.5 gap-1 w-fit"
-            onClick={() => window.open(bookingUrl, '_blank')}
+        {!isMyProperty && detail.price < myPropertyPrice && (
+          <TrendingDown className="h-2.5 w-2.5 text-success" />
+        )}
+        {hasSignificantChange && (
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "text-[9px] px-1 py-0 h-4",
+              detail.percentChange! > 0 ? "text-destructive border-destructive" : "text-success border-success"
+            )}
           >
-            Book <ExternalLink className="h-2.5 w-2.5" />
-          </Button>
+            {detail.percentChange! > 0 ? '+' : ''}{detail.percentChange!.toFixed(1)}%
+          </Badge>
         )}
       </div>
     );
+
+    if (detail.roomType) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {priceContent}
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="text-xs">{detail.roomType}</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return priceContent;
   };
 
   return (
-    <div className="overflow-auto">
-      <table className="w-full border-collapse text-xs">
-        <thead>
-          <tr className="border-b bg-muted/50">
-            <th className="sticky left-0 bg-muted/50 p-2 text-left text-xs font-medium"></th>
-            <th className="p-2 text-left text-xs font-medium">Date</th>
-            <th className="bg-orange-50 dark:bg-orange-950/20 p-2 text-left text-xs font-medium">
-              {selectedProperty.name}
-            </th>
-            {competitors.map((comp) => (
-              <th key={comp.id} className="p-2 text-left text-xs font-medium">{comp.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pricingData.map((row, idx) => (
-            <tr
-              key={idx}
-              className="border-b transition-colors hover:bg-muted/30"
-            >
-              <td className="sticky left-0 bg-background p-2">
-                <span className="text-[10px] text-muted-foreground">{row.day}</span>
-              </td>
-              <td className="p-2 text-xs font-medium">
-                {row.date}
-              </td>
-              <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
-                {renderPriceCell(row.myProperty, selectedProperty.booking_url, true)}
-              </td>
-              {competitors.map((comp) => {
-                const detail = row.competitorPrices[comp.id];
-                return (
-                  <td key={comp.id} className="p-2">
-                    {renderPriceCell(detail, comp.booking_url)}
-                  </td>
-                );
-              })}
+    <TooltipProvider>
+      <div className="overflow-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="sticky left-0 bg-muted/50 p-2 text-left text-xs font-medium"></th>
+              <th className="p-2 text-left text-xs font-medium">Date</th>
+              <th className="bg-orange-50 dark:bg-orange-950/20 p-2 text-left text-xs font-medium">
+                {selectedProperty.name}
+              </th>
+              {competitors.map((comp) => (
+                <th key={comp.id} className="p-2 text-left text-xs font-medium">{comp.name}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {pricingData.map((row, idx) => (
+              <tr
+                key={idx}
+                className="border-b transition-colors hover:bg-muted/30"
+              >
+                <td className="sticky left-0 bg-background p-2">
+                  <span className="text-[10px] text-muted-foreground">{row.day}</span>
+                </td>
+                <td className="p-2 text-xs font-medium">
+                  {row.date}
+                </td>
+                <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
+                  {renderPriceCell(row.myProperty, true)}
+                </td>
+                {competitors.map((comp) => {
+                  const detail = row.competitorPrices[comp.id];
+                  return (
+                    <td key={comp.id} className="p-2">
+                      {renderPriceCell(detail)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </TooltipProvider>
   );
 };
