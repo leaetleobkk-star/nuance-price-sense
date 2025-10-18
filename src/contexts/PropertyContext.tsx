@@ -19,6 +19,7 @@ interface PropertyContextType {
   setSelectedProperty: (property: Property | null) => void;
   competitors: Competitor[];
   isLoading: boolean;
+  refreshProperties: () => Promise<void>;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
@@ -77,6 +78,7 @@ export const PropertyProvider = ({ children }: { children: ReactNode }) => {
         setSelectedProperty,
         competitors,
         isLoading,
+        refreshProperties: fetchProperties,
       }}
     >
       {children}

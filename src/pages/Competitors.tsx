@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, ExternalLink } from "lucide-react";
 
@@ -28,7 +29,7 @@ interface Competitor {
 const Competitors = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedProperty } = useProperty();
+  const { selectedProperty, properties, setSelectedProperty, refreshProperties } = useProperty();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string>("");
   const [newCompetitorName, setNewCompetitorName] = useState("");
@@ -36,6 +37,9 @@ const Competitors = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingCompetitor, setIsUploadingCompetitor] = useState(false);
   const [isUploadingProperty, setIsUploadingProperty] = useState(false);
+  const [isAddPropertyDialogOpen, setIsAddPropertyDialogOpen] = useState(false);
+  const [newPropertyName, setNewPropertyName] = useState("");
+  const [newPropertyUrl, setNewPropertyUrl] = useState("");
 
   useEffect(() => {
     checkAuth();
@@ -100,6 +104,44 @@ const Competitors = () => {
       setNewCompetitorName("");
       setNewCompetitorUrl("");
       fetchCompetitors(selectedProperty.id);
+    }
+  };
+
+  const handleAddProperty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    setIsLoading(true);
+    const { data, error } = await supabase.from("properties").insert({
+      user_id: session.user.id,
+      name: newPropertyName,
+      booking_url: newPropertyUrl || null,
+    }).select().single();
+
+    setIsLoading(false);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Property created successfully",
+      });
+      setNewPropertyName("");
+      setNewPropertyUrl("");
+      setIsAddPropertyDialogOpen(false);
+      
+      // Refresh properties and select the new one
+      await refreshProperties();
+      if (data) {
+        setSelectedProperty(data);
+      }
     }
   };
 
@@ -300,9 +342,56 @@ const Competitors = () => {
       <Header />
       <PropertySelector />
       <main className="container mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Competitor Management</h1>
-          <p className="text-muted-foreground">Add competitors and upload CSV pricing data</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Competitor Management</h1>
+            <p className="text-muted-foreground">Add competitors and upload CSV pricing data</p>
+          </div>
+          <Dialog open={isAddPropertyDialogOpen} onOpenChange={setIsAddPropertyDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Property
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleAddProperty}>
+                <DialogHeader>
+                  <DialogTitle>Add New Property</DialogTitle>
+                  <DialogDescription>
+                    Create a new property to track rates and competitors
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="property-name">Property Name</Label>
+                    <Input
+                      id="property-name"
+                      placeholder="e.g., My Hotel Bangkok"
+                      value={newPropertyName}
+                      onChange={(e) => setNewPropertyName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="property-url">Booking.com URL (Optional)</Label>
+                    <Input
+                      id="property-url"
+                      type="url"
+                      placeholder="https://www.booking.com/hotel/..."
+                      value={newPropertyUrl}
+                      onChange={(e) => setNewPropertyUrl(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? "Creating..." : "Create Property"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {!selectedProperty ? (
