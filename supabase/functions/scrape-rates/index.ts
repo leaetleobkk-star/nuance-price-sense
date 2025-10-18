@@ -20,49 +20,63 @@ interface RequestBody {
   endDate: string;
 }
 
-const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-];
-
-// Extract price from Booking.com HTML based on Python scraper patterns
-function extractPrice(html: string): number | null {
-  // Look for various price patterns in Booking.com HTML
-  const patterns = [
-    // data-hotel-rounded-price attribute
-    /data-hotel-rounded-price="(\d+)"/,
-    // Price with THB currency symbol
-    /THB\s*฿?\s*([\d,]+)/,
-    // Price with baht symbol
-    /฿\s*([\d,]+)/,
-    // Price in JSON-like structures
-    /"price[_-]?amount[":\s]+(\d+)/i,
-    // Price test ids
-    /data-testid="price[^"]*"[^>]*>[\s\S]*?(\d{3,6})/,
+// Extract price from Booking.com content using multiple strategies
+function extractPrice(content: string): number | null {
+  console.log('Attempting to extract price from content...');
+  
+  // Strategy 1: Look for price in markdown format (from Firecrawl)
+  const markdownPricePatterns = [
+    // THB with number
+    /THB\s*฿?\s*([\d,]+)/gi,
+    // Baht symbol with number
+    /฿\s*([\d,]+)/g,
+    // Price near "total" or "night"
+    /(?:total|night|price)[\s\S]{0,50}?฿?\s*([\d,]+)/gi,
   ];
   
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match) {
+  for (const pattern of markdownPricePatterns) {
+    const matches = content.matchAll(pattern);
+    for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
       const price = parseInt(priceStr, 10);
-      if (!isNaN(price) && price > 100 && price < 100000) {
+      if (!isNaN(price) && price > 500 && price < 50000) {
+        console.log(`Found price ${price} THB using markdown pattern`);
         return price;
       }
     }
   }
   
+  // Strategy 2: Look for structured data patterns
+  const htmlPatterns = [
+    /data-hotel-rounded-price="(\d+)"/,
+    /"priceBreakdown"[\s\S]{0,200}?"grossPrice"[\s\S]{0,50}?:\s*"?([\d,]+)"?/,
+    /"value"[\s\S]{0,30}?:\s*"?([\d,]+)"?[\s\S]{0,30}?"currency"[\s\S]{0,30}?:\s*"THB"/,
+  ];
+  
+  for (const pattern of htmlPatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
+      const price = parseInt(priceStr, 10);
+      if (!isNaN(price) && price > 500 && price < 50000) {
+        console.log(`Found price ${price} THB using HTML pattern`);
+        return price;
+      }
+    }
+  }
+  
+  console.log('No valid price found in content');
   return null;
 }
 
-// Scrape booking.com for a specific date (based on Python scraper logic)
-async function scrapeBookingRate(url: string, checkInDate: string): Promise<number | null> {
+// Scrape booking.com using Firecrawl API
+async function scrapeBookingRate(url: string, checkInDate: string, firecrawlApiKey: string): Promise<number | null> {
   try {
     const checkOutDate = new Date(checkInDate);
     checkOutDate.setDate(checkOutDate.getDate() + 1);
     const checkOut = checkOutDate.toISOString().split('T')[0];
     
-    // Build URL with query parameters like Python scraper
+    // Build URL with query parameters
     const urlObj = new URL(url);
     urlObj.searchParams.set('checkin', checkInDate);
     urlObj.searchParams.set('checkout', checkOut);
@@ -71,28 +85,52 @@ async function scrapeBookingRate(url: string, checkInDate: string): Promise<numb
     urlObj.searchParams.set('selected_currency', 'THB');
     urlObj.searchParams.set('sb_price_type', 'total');
     
-    const response = await fetch(urlObj.toString(), {
+    const targetUrl = urlObj.toString();
+    console.log(`Scraping with Firecrawl: ${targetUrl}`);
+    
+    // Use Firecrawl API to scrape the page
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
       headers: {
-        'User-Agent': USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-GB,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'no-cache',
+        'Authorization': `Bearer ${firecrawlApiKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        url: targetUrl,
+        formats: ['markdown', 'html'],
+        onlyMainContent: false,
+        waitFor: 3000, // Wait for dynamic content to load
+      }),
     });
     
-    if (response.status !== 200) {
-      console.log(`Failed to fetch ${url} for ${checkInDate}: HTTP ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Firecrawl API error: ${response.status} - ${errorText}`);
       return null;
     }
     
-    const html = await response.text();
-    const price = extractPrice(html);
+    const data = await response.json();
+    
+    if (!data.success) {
+      console.error('Firecrawl scraping failed:', data);
+      return null;
+    }
+    
+    // Try to extract price from markdown first, then HTML
+    let price = null;
+    
+    if (data.markdown) {
+      price = extractPrice(data.markdown);
+    }
+    
+    if (!price && data.html) {
+      price = extractPrice(data.html);
+    }
     
     if (price) {
-      console.log(`Extracted price ${price} THB for ${checkInDate}`);
+      console.log(`Successfully extracted price ${price} THB for ${checkInDate}`);
     } else {
-      console.log(`No price found for ${checkInDate}`);
+      console.log(`No price found for ${checkInDate} - content might need manual review`);
     }
     
     return price;
@@ -111,6 +149,22 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    
+    if (!firecrawlApiKey) {
+      console.error('FIRECRAWL_API_KEY not configured');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Firecrawl API key not configured. Please add your FIRECRAWL_API_KEY in the backend settings.',
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        }
+      );
+    }
+    
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { propertyId, propertyName, propertyUrl, competitors, startDate, endDate }: RequestBody = await req.json();
@@ -119,6 +173,7 @@ Deno.serve(async (req) => {
     console.log('Date range:', startDate, 'to', endDate);
     console.log('Property URL:', propertyUrl);
     console.log('Competitors to scrape:', competitors.length);
+    console.log('Using Firecrawl API for reliable scraping');
 
     // Check if this period was recently scraped
     const { data: recentData } = await supabase
@@ -160,7 +215,8 @@ Deno.serve(async (req) => {
       
       for (const checkInDate of dates) {
         try {
-          const price = await scrapeBookingRate(hotel.url, checkInDate);
+          console.log(`Scraping ${hotel.name} for ${checkInDate}...`);
+          const price = await scrapeBookingRate(hotel.url, checkInDate, firecrawlApiKey);
           
           if (price !== null) {
             const checkOutDate = new Date(checkInDate);
@@ -203,8 +259,8 @@ Deno.serve(async (req) => {
           const progress = Math.round((completed / total) * 100);
           console.log(`Progress: ${progress}% (${completed}/${total})`);
           
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 800));
+          // Longer delay between requests to be respectful and ensure quality
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (error) {
           console.error(`Error scraping ${hotel.name} for ${checkInDate}:`, error);
           completed++;
