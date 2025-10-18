@@ -229,6 +229,18 @@ const Competitors = () => {
         throw new Error('No valid rate data found in CSV');
       }
 
+      // Get user ID for storage path
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      // Store CSV file in storage
+      const filePath = `${session.user.id}/competitor_${selectedCompetitorId}.csv`;
+      const { error: uploadError } = await supabase.storage
+        .from('rate-csvs')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
       // Insert rates into database
       const ratesToInsert = rates.map(rate => {
         const checkInDate = new Date(rate.check_in_date);
@@ -279,6 +291,18 @@ const Competitors = () => {
       if (rates.length === 0) {
         throw new Error('No valid rate data found in CSV');
       }
+
+      // Get user ID for storage path
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      // Store CSV file in storage
+      const filePath = `${session.user.id}/property_${selectedProperty.id}.csv`;
+      const { error: uploadError } = await supabase.storage
+        .from('rate-csvs')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
 
       // Insert rates into database
       const ratesToInsert = rates.map(rate => {

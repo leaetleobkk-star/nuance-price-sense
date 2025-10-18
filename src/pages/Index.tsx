@@ -9,6 +9,8 @@ import { PropertyProvider, useProperty } from "@/contexts/PropertyContext";
 import { useToast } from "@/hooks/use-toast";
 import { DateRange } from "react-day-picker";
 import { addDays } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 
 interface PricingData {
   date: string;
@@ -33,6 +35,177 @@ const IndexContent = () => {
   const [updatedDates, setUpdatedDates] = useState<Set<string>>(new Set());
   const [pendingDates, setPendingDates] = useState<Set<string>>(new Set());
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
+  const [isRefreshingFromCSV, setIsRefreshingFromCSV] = useState(false);
+
+  const parseCSV = (csvText: string) => {
+    const lines = csvText.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+    
+    const dateIdx = headers.findIndex(h => h.toLowerCase() === 'date');
+    if (dateIdx === -1) {
+      throw new Error('CSV must have a "Date" column');
+    }
+
+    const roomA1Idx = headers.findIndex(h => h.includes('Room_A1'));
+    const priceA1Idx = headers.findIndex(h => h.includes('Price_A1'));
+    const roomA2Idx = headers.findIndex(h => h.includes('Room_A2'));
+    const priceA2Idx = headers.findIndex(h => h.includes('Price_A2'));
+
+    const rates: Array<{
+      check_in_date: string;
+      adults: number;
+      room_type: string | null;
+      price_amount: number;
+    }> = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      const dateStr = values[dateIdx];
+      
+      if (!dateStr) continue;
+
+      let isoDate: string;
+      if (dateStr.includes('/')) {
+        const [month, day, year] = dateStr.split('/');
+        isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      } else {
+        isoDate = dateStr;
+      }
+
+      if (roomA1Idx !== -1 && priceA1Idx !== -1) {
+        const room = values[roomA1Idx];
+        const price = parseFloat(values[priceA1Idx]);
+        if (!isNaN(price) && price > 0) {
+          rates.push({
+            check_in_date: isoDate,
+            adults: 1,
+            room_type: room || null,
+            price_amount: price,
+          });
+        }
+      }
+
+      if (roomA2Idx !== -1 && priceA2Idx !== -1) {
+        const room = values[roomA2Idx];
+        const price = parseFloat(values[priceA2Idx]);
+        if (!isNaN(price) && price > 0) {
+          rates.push({
+            check_in_date: isoDate,
+            adults: 2,
+            room_type: room || null,
+            price_amount: price,
+          });
+        }
+      }
+    }
+
+    return rates;
+  };
+
+  const handleRefreshFromCSV = async () => {
+    if (!selectedProperty || competitors.length === 0) {
+      toast({
+        title: "Cannot refresh",
+        description: "Please select a property with competitors configured",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRefreshingFromCSV(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      let totalProcessed = 0;
+
+      // Process property CSV
+      const propertyPath = `${session.user.id}/property_${selectedProperty.id}.csv`;
+      const { data: propertyFile, error: propertyError } = await supabase.storage
+        .from('rate-csvs')
+        .download(propertyPath);
+
+      if (!propertyError && propertyFile) {
+        const text = await propertyFile.text();
+        const rates = parseCSV(text);
+        
+        // Delete existing rates for this property
+        await supabase.from('scraped_rates')
+          .delete()
+          .eq('property_id', selectedProperty.id);
+
+        // Insert new rates
+        const ratesToInsert = rates.map(rate => {
+          const checkInDate = new Date(rate.check_in_date);
+          const checkOutDate = new Date(checkInDate);
+          checkOutDate.setDate(checkOutDate.getDate() + 1);
+          
+          return {
+            ...rate,
+            check_out_date: checkOutDate.toISOString().split('T')[0],
+            property_id: selectedProperty.id,
+            currency: 'THB',
+          };
+        });
+
+        await supabase.from('scraped_rates').insert(ratesToInsert);
+        totalProcessed += rates.length;
+      }
+
+      // Process competitor CSVs
+      for (const competitor of competitors) {
+        const competitorPath = `${session.user.id}/competitor_${competitor.id}.csv`;
+        const { data: compFile, error: compError } = await supabase.storage
+          .from('rate-csvs')
+          .download(competitorPath);
+
+        if (!compError && compFile) {
+          const text = await compFile.text();
+          const rates = parseCSV(text);
+          
+          // Delete existing rates for this competitor
+          await supabase.from('scraped_rates')
+            .delete()
+            .eq('competitor_id', competitor.id);
+
+          // Insert new rates
+          const ratesToInsert = rates.map(rate => {
+            const checkInDate = new Date(rate.check_in_date);
+            const checkOutDate = new Date(checkInDate);
+            checkOutDate.setDate(checkOutDate.getDate() + 1);
+            
+            return {
+              ...rate,
+              check_out_date: checkOutDate.toISOString().split('T')[0],
+              competitor_id: competitor.id,
+              currency: 'THB',
+            };
+          });
+
+          await supabase.from('scraped_rates').insert(ratesToInsert);
+          totalProcessed += rates.length;
+        }
+      }
+
+      setTableRefreshKey(k => k + 1);
+
+      toast({
+        title: "Success",
+        description: `Refreshed ${totalProcessed} rates from stored CSV files`,
+      });
+    } catch (error: any) {
+      console.error('CSV refresh error:', error);
+      toast({
+        title: "Refresh failed",
+        description: error.message || "Failed to refresh from CSV files",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshingFromCSV(false);
+    }
+  };
+  
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -302,6 +475,18 @@ const IndexContent = () => {
         onExport={handleExportCSV}
         scrapingProgress={scrapingProgress}
       />
+      
+      <div className="px-6 pb-4">
+        <Button 
+          onClick={handleRefreshFromCSV}
+          disabled={isRefreshingFromCSV}
+          variant="outline"
+          size="sm"
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingFromCSV ? 'animate-spin' : ''}`} />
+          {isRefreshingFromCSV ? 'Refreshing...' : 'Refresh from CSV'}
+        </Button>
+      </div>
       
       {/* Duplicate warning dialog */}
       {showDuplicateWarning && (
