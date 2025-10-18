@@ -42,8 +42,8 @@ function extractPrice(content: string): number | null {
     const matches = content.matchAll(pattern);
     for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
-      const price = parseInt(priceStr, 10);
-      if (!isNaN(price) && price > 500 && price < 50000) {
+       const price = parseInt(priceStr, 10);
+       if (!isNaN(price) && price > 1000 && price < 50000) {
         candidates.push(price);
       }
     }
@@ -60,18 +60,24 @@ function extractPrice(content: string): number | null {
     const matches = content.matchAll(pattern);
     for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
-      const price = parseInt(priceStr, 10);
-      if (!isNaN(price) && price > 500 && price < 50000) {
+       const price = parseInt(priceStr, 10);
+       if (!isNaN(price) && price > 1000 && price < 50000) {
         candidates.push(price);
       }
     }
   }
 
-  if (candidates.length) {
-    const best = Math.min(...candidates);
-    console.log(`Selected best price ${best} THB from ${candidates.length} candidates`);
-    return best;
-  }
+   if (candidates.length) {
+     const filtered = candidates.filter(p => p >= 1000 && p <= 50000).sort((a,b) => a - b);
+     if (filtered.length) {
+       const median = filtered[Math.floor(filtered.length / 2)];
+       console.log(`Selected median price ${median} THB from ${filtered.length}/${candidates.length} candidates`);
+       return median;
+     }
+     const best = Math.min(...candidates);
+     console.log(`Selected fallback best price ${best} THB from ${candidates.length} candidates`);
+     return best;
+   }
   
   console.log('No valid price found in content');
   return null;
