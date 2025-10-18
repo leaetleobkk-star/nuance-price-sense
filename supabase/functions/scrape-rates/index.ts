@@ -114,15 +114,40 @@ async function scrapeBookingRate(url: string, checkInDate: string, firecrawlApiK
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
-          let price = null;
-          if (data.markdown) price = extractPrice(data.markdown);
-          if (!price && data.html) price = extractPrice(data.html);
-          if (price) return price;
-          console.log('Firecrawl returned content but no price matched, falling back to direct fetch...');
-        } else {
-          console.error('Firecrawl scraping failed:', data);
+        // Normalize Firecrawl response shapes
+        const contents: string[] = [];
+        try {
+          if (typeof data.markdown === 'string') contents.push(data.markdown);
+          if (typeof data.html === 'string') contents.push(data.html);
+          if (data.data) {
+            if (typeof data.data.markdown === 'string') contents.push(data.data.markdown);
+            if (typeof data.data.html === 'string') contents.push(data.data.html);
+            if (Array.isArray(data.data)) {
+              for (const doc of data.data) {
+                if (typeof doc === 'string') contents.push(doc);
+                if (typeof doc?.markdown === 'string') contents.push(doc.markdown);
+                if (typeof doc?.html === 'string') contents.push(doc.html);
+                if (typeof doc?.content === 'string') contents.push(doc.content);
+              }
+            }
+          }
+          if (typeof data.content === 'string') contents.push(data.content);
+        } catch (e) {
+          console.warn('Could not normalize Firecrawl response:', e);
         }
+
+        // Try to extract price from all available contents, pick the lowest plausible
+        const found: number[] = [];
+        for (const c of contents) {
+          const p = extractPrice(c);
+          if (p) found.push(p);
+        }
+
+        if (found.length) {
+          const best = Math.min(...found);
+          return best;
+        }
+        console.log('Firecrawl returned content but no price matched, falling back to direct fetch...');
       } else {
         const errorText = await response.text();
         console.error(`Firecrawl API error: ${response.status} - ${errorText}`);
