@@ -60,6 +60,8 @@ const IndexContent = () => {
     }> = [];
 
     for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue; // Skip empty lines
+      
       const values = lines[i].split(',').map(v => v.trim());
       const dateStr = values[dateIdx];
       
@@ -73,27 +75,31 @@ const IndexContent = () => {
         isoDate = dateStr;
       }
 
+      // Only add rate for A1 if both room and price exist and price is valid
       if (roomA1Idx !== -1 && priceA1Idx !== -1) {
         const room = values[roomA1Idx];
-        const price = parseFloat(values[priceA1Idx]);
-        if (!isNaN(price) && price > 0) {
+        const priceStr = values[priceA1Idx];
+        const price = parseFloat(priceStr);
+        if (room && priceStr && !isNaN(price) && price > 0) {
           rates.push({
             check_in_date: isoDate,
             adults: 1,
-            room_type: room || null,
+            room_type: room,
             price_amount: price,
           });
         }
       }
 
+      // Only add rate for A2 if both room and price exist and price is valid
       if (roomA2Idx !== -1 && priceA2Idx !== -1) {
         const room = values[roomA2Idx];
-        const price = parseFloat(values[priceA2Idx]);
-        if (!isNaN(price) && price > 0) {
+        const priceStr = values[priceA2Idx];
+        const price = parseFloat(priceStr);
+        if (room && priceStr && !isNaN(price) && price > 0) {
           rates.push({
             check_in_date: isoDate,
             adults: 2,
-            room_type: room || null,
+            room_type: room,
             price_amount: price,
           });
         }
@@ -148,32 +154,48 @@ const IndexContent = () => {
             const text = await propertyFile.text();
             const rates = parseCSV(text);
             
-            // Delete existing rates for this property
+            console.log(`Parsed ${rates.length} rates for property from CSV`);
+            
+            // CRITICAL: Delete ALL existing rates for this property first
             const { error: deleteError } = await supabase.from('scraped_rates')
               .delete()
               .eq('property_id', selectedProperty.id);
 
-            if (deleteError) throw deleteError;
+            if (deleteError) {
+              console.error('Delete error:', deleteError);
+              throw deleteError;
+            }
 
-            // Insert new rates
-            const ratesToInsert = rates.map(rate => {
-              const checkInDate = new Date(rate.check_in_date);
-              const checkOutDate = new Date(checkInDate);
-              checkOutDate.setDate(checkOutDate.getDate() + 1);
-              
-              return {
-                ...rate,
-                check_out_date: checkOutDate.toISOString().split('T')[0],
-                property_id: selectedProperty.id,
-                currency: 'THB',
-              };
-            });
+            console.log('Successfully deleted old property rates');
 
-            const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
-            if (insertError) throw insertError;
+            if (rates.length > 0) {
+              // Insert new rates
+              const ratesToInsert = rates.map(rate => {
+                const checkInDate = new Date(rate.check_in_date);
+                const checkOutDate = new Date(checkInDate);
+                checkOutDate.setDate(checkOutDate.getDate() + 1);
+                
+                return {
+                  ...rate,
+                  check_out_date: checkOutDate.toISOString().split('T')[0],
+                  property_id: selectedProperty.id,
+                  competitor_id: null,
+                  currency: 'THB',
+                };
+              });
 
-            totalProcessed += rates.length;
-            filesProcessed++;
+              const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
+              if (insertError) {
+                console.error('Insert error:', insertError);
+                throw insertError;
+              }
+
+              console.log(`Successfully inserted ${rates.length} new rates for property`);
+              totalProcessed += rates.length;
+              filesProcessed++;
+            } else {
+              console.log('No valid rates found in property CSV');
+            }
           } catch (error: any) {
             console.error('Property CSV processing error:', error);
             errors.push(`Property CSV: ${error.message}`);
@@ -215,32 +237,46 @@ const IndexContent = () => {
               const text = await compFile.text();
               const rates = parseCSV(text);
               
-              // Delete existing rates for this competitor
+              console.log(`Parsed ${rates.length} rates for competitor ${competitor.name}`);
+              
+              // CRITICAL: Delete ALL existing rates for this competitor first
               const { error: deleteError } = await supabase.from('scraped_rates')
                 .delete()
                 .eq('competitor_id', competitor.id);
 
-              if (deleteError) throw deleteError;
+              if (deleteError) {
+                console.error(`Delete error for ${competitor.name}:`, deleteError);
+                throw deleteError;
+              }
 
-              // Insert new rates
-              const ratesToInsert = rates.map(rate => {
-                const checkInDate = new Date(rate.check_in_date);
-                const checkOutDate = new Date(checkInDate);
-                checkOutDate.setDate(checkOutDate.getDate() + 1);
-                
-                return {
-                  ...rate,
-                  check_out_date: checkOutDate.toISOString().split('T')[0],
-                  competitor_id: competitor.id,
-                  currency: 'THB',
-                };
-              });
+              console.log(`Deleted old rates for competitor ${competitor.name}`);
 
-              const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
-              if (insertError) throw insertError;
+              if (rates.length > 0) {
+                // Insert new rates
+                const ratesToInsert = rates.map(rate => {
+                  const checkInDate = new Date(rate.check_in_date);
+                  const checkOutDate = new Date(checkInDate);
+                  checkOutDate.setDate(checkOutDate.getDate() + 1);
+                  
+                  return {
+                    ...rate,
+                    check_out_date: checkOutDate.toISOString().split('T')[0],
+                    competitor_id: competitor.id,
+                    property_id: null,
+                    currency: 'THB',
+                  };
+                });
 
-              totalProcessed += rates.length;
-              filesProcessed++;
+                const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
+                if (insertError) {
+                  console.error(`Insert error for ${competitor.name}:`, insertError);
+                  throw insertError;
+                }
+
+                console.log(`Inserted ${rates.length} new rates for competitor ${competitor.name}`);
+                totalProcessed += rates.length;
+                filesProcessed++;
+              }
             } catch (error: any) {
               console.error(`Competitor ${competitor.name} CSV processing error:`, error);
               errors.push(`${competitor.name} CSV: ${error.message}`);

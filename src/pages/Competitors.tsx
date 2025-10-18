@@ -171,6 +171,8 @@ const Competitors = () => {
     }> = [];
 
     for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue; // Skip empty lines
+      
       const values = lines[i].split(',').map(v => v.trim());
       const dateStr = values[dateIdx];
       
@@ -185,29 +187,31 @@ const Competitors = () => {
         isoDate = dateStr; // Already in YYYY-MM-DD format
       }
 
-      // Add A1 (1 adult) rate if available
+      // Only add rate for A1 if both room and price exist and price is valid
       if (roomA1Idx !== -1 && priceA1Idx !== -1) {
         const room = values[roomA1Idx];
-        const price = parseFloat(values[priceA1Idx]);
-        if (!isNaN(price) && price > 0) {
+        const priceStr = values[priceA1Idx];
+        const price = parseFloat(priceStr);
+        if (room && priceStr && !isNaN(price) && price > 0) {
           rates.push({
             check_in_date: isoDate,
             adults: 1,
-            room_type: room || null,
+            room_type: room,
             price_amount: price,
           });
         }
       }
 
-      // Add A2 (2 adults) rate if available
+      // Only add rate for A2 if both room and price exist and price is valid
       if (roomA2Idx !== -1 && priceA2Idx !== -1) {
         const room = values[roomA2Idx];
-        const price = parseFloat(values[priceA2Idx]);
-        if (!isNaN(price) && price > 0) {
+        const priceStr = values[priceA2Idx];
+        const price = parseFloat(priceStr);
+        if (room && priceStr && !isNaN(price) && price > 0) {
           rates.push({
             check_in_date: isoDate,
             adults: 2,
-            room_type: room || null,
+            room_type: room,
             price_amount: price,
           });
         }
