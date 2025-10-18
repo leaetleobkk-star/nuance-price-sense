@@ -10,6 +10,13 @@ import { useToast } from "@/hooks/use-toast";
 import { DateRange } from "react-day-picker";
 import { addDays } from "date-fns";
 
+interface PricingData {
+  date: string;
+  day: string;
+  myProperty: number | string;
+  competitorPrices: Record<string, number | string>;
+}
+
 const IndexContent = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -19,6 +26,7 @@ const IndexContent = () => {
     from: new Date(),
     to: addDays(new Date(), 30),
   });
+  const [pricingData, setPricingData] = useState<PricingData[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -84,6 +92,56 @@ const IndexContent = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    if (!selectedProperty || pricingData.length === 0) {
+      toast({
+        title: "No data to export",
+        description: "Please refresh rates first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare CSV data
+    const headers = ['Date', 'Day', selectedProperty.name, ...competitors.map(c => c.name)];
+    
+    const rows = pricingData.map(row => {
+      const competitorPrices = competitors.map(c => {
+        const price = row.competitorPrices[c.id];
+        return typeof price === 'number' ? price.toString() : price;
+      });
+      
+      return [
+        row.date,
+        row.day,
+        typeof row.myProperty === 'number' ? row.myProperty.toString() : row.myProperty,
+        ...competitorPrices
+      ];
+    });
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `rates_${selectedProperty.name}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export successful",
+      description: "CSV file has been downloaded",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -93,9 +151,10 @@ const IndexContent = () => {
         isRefreshing={isRefreshing}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
+        onExport={handleExportCSV}
       />
         <main className="p-6">
-        <PricingTable dateRange={dateRange} />
+        <PricingTable dateRange={dateRange} onDataLoaded={setPricingData} />
         
         <div className="mt-6 rounded-lg border bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold">Price Recommendations</h2>

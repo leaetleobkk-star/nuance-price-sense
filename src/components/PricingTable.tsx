@@ -15,6 +15,7 @@ interface PricingData {
 
 interface PricingTableProps {
   dateRange?: DateRange;
+  onDataLoaded?: (data: PricingData[]) => void;
 }
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -30,7 +31,7 @@ const getDayName = (dateStr: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-export const PricingTable = ({ dateRange }: PricingTableProps) => {
+export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,6 +94,9 @@ export const PricingTable = ({ dateRange }: PricingTableProps) => {
       });
 
       setPricingData(tableData);
+      if (onDataLoaded) {
+        onDataLoaded(tableData);
+      }
     } catch (error) {
       console.error('Error in fetchPricingData:', error);
     } finally {

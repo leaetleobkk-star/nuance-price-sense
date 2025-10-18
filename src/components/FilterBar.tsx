@@ -1,16 +1,18 @@
 import { Button } from "@/components/ui/button";
-import { Calendar, ChevronDown, Filter, RefreshCw, Download, BarChart3, Table2, Grid3x3 } from "lucide-react";
+import { Calendar, ChevronDown, Filter, RefreshCw, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface FilterBarProps {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   dateRange?: DateRange;
   onDateRangeChange?: (range: DateRange | undefined) => void;
+  onExport?: () => void;
 }
 
 export const FilterBar = ({ 
@@ -18,6 +20,7 @@ export const FilterBar = ({
   isRefreshing = false,
   dateRange,
   onDateRangeChange = () => {},
+  onExport = () => {},
 }: FilterBarProps) => {
   return (
     <div className="border-b bg-card px-6 py-4">
@@ -65,25 +68,15 @@ export const FilterBar = ({
             <ChevronDown className="h-4 w-4" />
           </Button>
           
-          <Button variant="outline" size="sm" className="gap-2">
-            Desktop
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          
-          <Button variant="outline" size="sm" className="gap-2">
-            1 night
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          
-          <Button variant="outline" size="sm" className="gap-2">
-            2 guests
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          
-          <Button variant="outline" size="sm" className="gap-2">
-            Any room
-            <ChevronDown className="h-4 w-4" />
-          </Button>
+          <Select defaultValue="2">
+            <SelectTrigger className="h-9 w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1 guest</SelectItem>
+              <SelectItem value="2">2 guests</SelectItem>
+            </SelectContent>
+          </Select>
           
           <Button variant="outline" size="sm" className="gap-2">
             Any meal
@@ -92,33 +85,9 @@ export const FilterBar = ({
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Compare
-          </Button>
-          
-          <Button variant="ghost" size="sm" className="gap-2">
-            <Table2 className="h-4 w-4" />
-            Table settings
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          
-          <div className="flex gap-1 border-l pl-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <BarChart3 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Grid3x3 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Table2 className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={onExport}>
             <Download className="h-4 w-4" />
             Export
-            <ChevronDown className="h-4 w-4" />
           </Button>
           
           <Button 
