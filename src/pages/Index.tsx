@@ -113,72 +113,40 @@ const IndexContent = () => {
       if (!session) throw new Error('Not authenticated');
 
       let totalProcessed = 0;
+      let filesProcessed = 0;
+      let errors: string[] = [];
 
       // Get the latest CSV upload for the property
-      const { data: propertyUpload } = await supabase
+      const { data: propertyUpload, error: propertyUploadError } = await supabase
         .from('csv_uploads')
         .select('file_path')
         .eq('property_id', selectedProperty.id)
         .order('uploaded_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (propertyUpload) {
+      if (propertyUploadError) {
+        console.error('Property upload fetch error:', propertyUploadError);
+        errors.push(`Property: ${propertyUploadError.message}`);
+      } else if (propertyUpload) {
         const { data: propertyFile, error: propertyError } = await supabase.storage
           .from('rate-csvs')
           .download(propertyUpload.file_path);
 
-        if (!propertyError && propertyFile) {
-          const text = await propertyFile.text();
-          const rates = parseCSV(text);
-          
-          // Delete existing rates for this property
-          await supabase.from('scraped_rates')
-            .delete()
-            .eq('property_id', selectedProperty.id);
-
-          // Insert new rates
-          const ratesToInsert = rates.map(rate => {
-            const checkInDate = new Date(rate.check_in_date);
-            const checkOutDate = new Date(checkInDate);
-            checkOutDate.setDate(checkOutDate.getDate() + 1);
-            
-            return {
-              ...rate,
-              check_out_date: checkOutDate.toISOString().split('T')[0],
-              property_id: selectedProperty.id,
-              currency: 'THB',
-            };
-          });
-
-          await supabase.from('scraped_rates').insert(ratesToInsert);
-          totalProcessed += rates.length;
-        }
-      }
-
-      // Process competitor CSVs
-      for (const competitor of competitors) {
-        const { data: competitorUpload } = await supabase
-          .from('csv_uploads')
-          .select('file_path')
-          .eq('competitor_id', competitor.id)
-          .order('uploaded_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (competitorUpload) {
-          const { data: compFile, error: compError } = await supabase.storage
-            .from('rate-csvs')
-            .download(competitorUpload.file_path);
-
-          if (!compError && compFile) {
-            const text = await compFile.text();
+        if (propertyError) {
+          console.error('Property file download error:', propertyError);
+          errors.push(`Property file: ${propertyError.message}`);
+        } else if (propertyFile) {
+          try {
+            const text = await propertyFile.text();
             const rates = parseCSV(text);
             
-            // Delete existing rates for this competitor
-            await supabase.from('scraped_rates')
+            // Delete existing rates for this property
+            const { error: deleteError } = await supabase.from('scraped_rates')
               .delete()
-              .eq('competitor_id', competitor.id);
+              .eq('property_id', selectedProperty.id);
+
+            if (deleteError) throw deleteError;
 
             // Insert new rates
             const ratesToInsert = rates.map(rate => {
@@ -189,23 +157,113 @@ const IndexContent = () => {
               return {
                 ...rate,
                 check_out_date: checkOutDate.toISOString().split('T')[0],
-                competitor_id: competitor.id,
+                property_id: selectedProperty.id,
                 currency: 'THB',
               };
             });
 
-            await supabase.from('scraped_rates').insert(ratesToInsert);
+            const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
+            if (insertError) throw insertError;
+
             totalProcessed += rates.length;
+            filesProcessed++;
+          } catch (error: any) {
+            console.error('Property CSV processing error:', error);
+            errors.push(`Property CSV: ${error.message}`);
           }
+        }
+      } else {
+        errors.push('No CSV uploaded for property');
+      }
+
+      // Process competitor CSVs
+      for (const competitor of competitors) {
+        const { data: competitorUpload, error: compUploadError } = await supabase
+          .from('csv_uploads')
+          .select('file_path')
+          .eq('competitor_id', competitor.id)
+          .order('uploaded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (compUploadError) {
+          console.error(`Competitor ${competitor.name} upload fetch error:`, compUploadError);
+          errors.push(`${competitor.name}: ${compUploadError.message}`);
+          continue;
+        }
+
+        if (competitorUpload) {
+          const { data: compFile, error: compError } = await supabase.storage
+            .from('rate-csvs')
+            .download(competitorUpload.file_path);
+
+          if (compError) {
+            console.error(`Competitor ${competitor.name} file download error:`, compError);
+            errors.push(`${competitor.name} file: ${compError.message}`);
+            continue;
+          }
+
+          if (compFile) {
+            try {
+              const text = await compFile.text();
+              const rates = parseCSV(text);
+              
+              // Delete existing rates for this competitor
+              const { error: deleteError } = await supabase.from('scraped_rates')
+                .delete()
+                .eq('competitor_id', competitor.id);
+
+              if (deleteError) throw deleteError;
+
+              // Insert new rates
+              const ratesToInsert = rates.map(rate => {
+                const checkInDate = new Date(rate.check_in_date);
+                const checkOutDate = new Date(checkInDate);
+                checkOutDate.setDate(checkOutDate.getDate() + 1);
+                
+                return {
+                  ...rate,
+                  check_out_date: checkOutDate.toISOString().split('T')[0],
+                  competitor_id: competitor.id,
+                  currency: 'THB',
+                };
+              });
+
+              const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
+              if (insertError) throw insertError;
+
+              totalProcessed += rates.length;
+              filesProcessed++;
+            } catch (error: any) {
+              console.error(`Competitor ${competitor.name} CSV processing error:`, error);
+              errors.push(`${competitor.name} CSV: ${error.message}`);
+            }
+          }
+        } else {
+          errors.push(`No CSV uploaded for ${competitor.name}`);
         }
       }
 
       setTableRefreshKey(k => k + 1);
 
-      toast({
-        title: "Success",
-        description: `Refreshed ${totalProcessed} rates from latest CSV files`,
-      });
+      if (errors.length > 0) {
+        toast({
+          title: "Partial success",
+          description: `Refreshed ${totalProcessed} rates from ${filesProcessed} files. Errors: ${errors.join('; ')}`,
+          variant: "destructive",
+        });
+      } else if (totalProcessed === 0) {
+        toast({
+          title: "No data processed",
+          description: "Please upload CSV files first in the Competitors page",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `Refreshed ${totalProcessed} rates from ${filesProcessed} CSV files`,
+        });
+      }
     } catch (error: any) {
       console.error('CSV refresh error:', error);
       toast({
