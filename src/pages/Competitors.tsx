@@ -146,12 +146,75 @@ const Competitors = () => {
           <p className="text-muted-foreground">Configure competitor URLs for price tracking</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
+        {properties.length === 0 ? (
+          <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Add Competitor</CardTitle>
-              <CardDescription>Track competitor prices from Booking.com</CardDescription>
+              <CardTitle>Create Your First Property</CardTitle>
+              <CardDescription>Start by adding a property to track competitors</CardDescription>
             </CardHeader>
+            <CardContent>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const name = formData.get('property-name') as string;
+                const booking_url = formData.get('property-url') as string;
+                
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) return;
+
+                const { error } = await supabase.from("properties").insert({
+                  user_id: session.user.id,
+                  name,
+                  booking_url: booking_url || null,
+                });
+
+                if (error) {
+                  toast({
+                    title: "Error",
+                    description: error.message,
+                    variant: "destructive",
+                  });
+                } else {
+                  toast({
+                    title: "Success",
+                    description: "Property created successfully",
+                  });
+                  fetchProperties();
+                  e.currentTarget.reset();
+                }
+              }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="property-name">Property Name</Label>
+                  <Input
+                    id="property-name"
+                    name="property-name"
+                    placeholder="e.g., My Hotel Pattaya"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="property-url">Booking.com URL (Optional)</Label>
+                  <Input
+                    id="property-url"
+                    name="property-url"
+                    type="url"
+                    placeholder="https://www.booking.com/hotel/..."
+                  />
+                </div>
+                <Button type="submit" className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Property
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Competitor</CardTitle>
+                <CardDescription>Track competitor prices from Booking.com</CardDescription>
+              </CardHeader>
             <CardContent>
               <form onSubmit={handleAddCompetitor} className="space-y-4">
                 <div className="space-y-2">
@@ -242,6 +305,7 @@ const Competitors = () => {
             </CardContent>
           </Card>
         </div>
+        )}
       </main>
     </div>
   );
