@@ -46,7 +46,7 @@ function extractPrice(content: string): number | null {
     for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
        const price = parseInt(priceStr, 10);
-       if (!isNaN(price) && price > 1500 && price < 50000) {
+       if (!isNaN(price) && price > 500 && price < 50000) {
         const idx = (match as any).index ?? content.indexOf(match[0]);
         const ctx = content.slice(Math.max(0, idx - 60), Math.min(content.length, idx + 60)).toLowerCase();
         if (badCtx.some(k => ctx.includes(k))) {
@@ -72,7 +72,7 @@ function extractPrice(content: string): number | null {
     for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
        const price = parseInt(priceStr, 10);
-       if (!isNaN(price) && price > 1500 && price < 50000) {
+       if (!isNaN(price) && price > 500 && price < 50000) {
         const idx = (match as any).index ?? content.indexOf(match[0]);
         const ctx = content.slice(Math.max(0, idx - 60), Math.min(content.length, idx + 60)).toLowerCase();
         if (badCtx.some(k => ctx.includes(k))) {
@@ -87,15 +87,36 @@ function extractPrice(content: string): number | null {
   }
 
    if (strong.length || weak.length) {
-     const base = (strong.length ? strong : weak).filter((p: number) => p >= 1500 && p <= 50000).sort((a: number, b: number) => a - b);
-     if (base.length) {
-       const median = base[Math.floor(base.length / 2)];
-       console.log(`Selected median price ${median} THB from ${base.length} candidates (strong=${strong.length}, weak=${weak.length})`);
+     const all = (strong.length ? strong : weak).filter((p: number) => p >= 500 && p <= 50000).sort((a: number, b: number) => a - b);
+     if (!all.length) {
+       console.log('No valid prices after filtering');
+       return null;
+     }
+     
+     // If we have multiple prices, use median to avoid outliers
+     if (all.length >= 3) {
+       const median = all[Math.floor(all.length / 2)];
+       console.log(`Selected median price ${median} THB from ${all.length} candidates (strong=${strong.length}, weak=${weak.length})`);
        return median;
      }
-     const fallback = Math.min(...(strong.length ? strong : weak));
-     console.log(`Selected fallback best price ${fallback} THB from ${(strong.length ? strong : weak).length} candidates`);
-     return fallback;
+     
+     // If we have 2 prices and they're close, take the average
+     if (all.length === 2) {
+       const [a, b] = all;
+       const ratio = Math.max(a, b) / Math.min(a, b);
+       if (ratio < 2) {
+         const avg = Math.round((a + b) / 2);
+         console.log(`Selected average price ${avg} THB from 2 close candidates: ${a}, ${b}`);
+         return avg;
+       }
+       // If they're far apart, take the higher one (likely the room rate)
+       console.log(`Selected higher price ${b} THB from 2 distant candidates: ${a}, ${b}`);
+       return b;
+     }
+     
+     // Single price
+     console.log(`Selected only price ${all[0]} THB`);
+     return all[0];
    }
   
   console.log('No valid price found in content');
