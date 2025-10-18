@@ -23,17 +23,11 @@ const IndexContent = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedProperty, competitors } = useProperty();
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(),
     to: addDays(new Date(), 30),
   });
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
-  const [scrapingProgress, setScrapingProgress] = useState(0);
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
-  const [pendingRefresh, setPendingRefresh] = useState<(() => void) | null>(null);
-  const [updatedDates, setUpdatedDates] = useState<Set<string>>(new Set());
-  const [pendingDates, setPendingDates] = useState<Set<string>>(new Set());
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
   const [isRefreshingFromCSV, setIsRefreshingFromCSV] = useState(false);
 
@@ -216,158 +210,6 @@ const IndexContent = () => {
     checkAuth();
   }, [navigate]);
 
-  const performRefresh = async () => {
-    if (!selectedProperty || competitors.length === 0) {
-      toast({
-        title: "Cannot refresh",
-        description: "Please select a property with competitors configured",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!dateRange?.from || !dateRange?.to) {
-      toast({
-        title: "Select date range",
-        description: "Please select a date range to scrape rates",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsRefreshing(true);
-    setScrapingProgress(0);
-
-    // Build pending dates from selected range
-    const dates: string[] = [];
-    const start = new Date(dateRange.from);
-    const end = new Date(dateRange.to);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(new Date(d).toISOString().split('T')[0]);
-    }
-    setPendingDates(new Set(dates));
-    
-    try {
-      const startedAt = new Date().toISOString();
-      const { data, error } = await supabase.functions.invoke("scrape-rates", {
-        body: {
-          propertyId: selectedProperty.id,
-          propertyName: selectedProperty.name,
-          propertyUrl: selectedProperty.booking_url?.replace(/\?$/, ''),
-          competitors: competitors.map(c => ({
-            id: c.id,
-            name: c.name,
-            url: (c.booking_url || '').replace(/\?$/, ''),
-          })),
-          startDate: dateRange.from.toISOString().split('T')[0],
-          endDate: dateRange.to.toISOString().split('T')[0],
-        },
-      });
-
-      if (error) throw error;
-
-      // Simulate progress updates while function runs
-      const interval = setInterval(() => {
-        setScrapingProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            return 100;
-          }
-          return Math.min(prev + 8, 100);
-        });
-      }, 500);
-
-      if (data?.hasRecentData) {
-        toast({
-          title: "Notice",
-          description: "This period was scraped recently. Data has been updated.",
-        });
-      }
-
-      // Mark updated dates and refresh table
-      const completed = new Set<string>(Array.from(new Set((data?.data || []).map((r: any) => r.date))));
-      setUpdatedDates(completed);
-      setPendingDates(new Set());
-      setTableRefreshKey(k => k + 1);
-
-      toast({
-        title: "Success",
-        description: `Scraped ${data?.data?.length || 0} rates successfully`,
-      });
-    } catch (error) {
-      console.error("Error refreshing rates:", error);
-      // Fallback: check if data was actually inserted despite network error
-      try {
-        const fromStr = dateRange.from!.toISOString().split('T')[0];
-        const toStr = dateRange.to!.toISOString().split('T')[0];
-        const compIds = competitors.map(c => c.id);
-        const [compRes, mineRes] = await Promise.all([
-          supabase
-            .from('scraped_rates')
-            .select('check_in_date')
-            .in('competitor_id', compIds)
-            .gte('check_in_date', fromStr)
-            .lte('check_in_date', toStr),
-          supabase
-            .from('scraped_rates')
-            .select('check_in_date')
-            .eq('property_id', selectedProperty.id)
-            .gte('check_in_date', fromStr)
-            .lte('check_in_date', toStr),
-        ]);
-        const seen = new Set<string>([
-          ...((compRes.data || []) as any[]).map(r => r.check_in_date),
-          ...((mineRes.data || []) as any[]).map(r => r.check_in_date),
-        ]);
-        if (seen.size > 0) {
-          setUpdatedDates(seen);
-          setPendingDates(new Set());
-          setTableRefreshKey(k => k + 1);
-          toast({
-            title: "Completed",
-            description: "Rates updated despite a network interruption.",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to refresh rates. Please try again.",
-            variant: "destructive",
-          });
-        }
-      } catch (fallbackErr) {
-        console.error('Fallback verification failed:', fallbackErr);
-        toast({
-          title: "Error",
-          description: "Failed to refresh rates. Please try again.",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsRefreshing(false);
-      setScrapingProgress(0);
-    }
-  };
-
-  const handleRefresh = async () => {
-    // Check if data exists for this period
-    if (dateRange?.from && dateRange?.to) {
-      const { data: existingData } = await supabase
-        .from('scraped_rates')
-        .select('id')
-        .gte('check_in_date', dateRange.from.toISOString().split('T')[0])
-        .lte('check_in_date', dateRange.to.toISOString().split('T')[0])
-        .limit(1);
-
-      if (existingData && existingData.length > 0) {
-        setShowDuplicateWarning(true);
-        setPendingRefresh(() => performRefresh);
-        return;
-      }
-    }
-
-    await performRefresh();
-  };
-
   const calculateRecommendations = () => {
     if (pricingData.length === 0) {
       return {
@@ -468,67 +310,34 @@ const IndexContent = () => {
       <Header />
       <PropertySelector />
       <FilterBar 
-        onRefresh={handleRefresh} 
-        isRefreshing={isRefreshing}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onExport={handleExportCSV}
-        scrapingProgress={scrapingProgress}
       />
       
-      <div className="px-6 pb-4">
-        <Button 
-          onClick={handleRefreshFromCSV}
-          disabled={isRefreshingFromCSV}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingFromCSV ? 'animate-spin' : ''}`} />
-          {isRefreshingFromCSV ? 'Refreshing...' : 'Refresh from CSV'}
-        </Button>
+      <div className="px-6 py-4 border-b bg-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Rate Comparison</h2>
+            <p className="text-sm text-muted-foreground">Upload CSVs in Competitors page, then refresh to see rates</p>
+          </div>
+          <Button 
+            onClick={handleRefreshFromCSV}
+            disabled={isRefreshingFromCSV}
+            size="default"
+            className="gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow-lg"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshingFromCSV ? 'animate-spin' : ''}`} />
+            {isRefreshingFromCSV ? 'Refreshing...' : 'Refresh Rates'}
+          </Button>
+        </div>
       </div>
       
-      {/* Duplicate warning dialog */}
-      {showDuplicateWarning && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 max-w-md mx-4 shadow-xl border">
-            <h3 className="text-lg font-semibold mb-2">Data Already Exists</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Rates for this period have already been scraped. Do you want to update them with fresh data?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowDuplicateWarning(false);
-                  setPendingRefresh(null);
-                }}
-                className="px-4 py-2 text-sm border rounded-md hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowDuplicateWarning(false);
-                  if (pendingRefresh) {
-                    pendingRefresh();
-                  }
-                  setPendingRefresh(null);
-                }}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-              >
-                Yes, Update Data
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-        <main className="p-6">
+      <main className="p-6">
         <PricingTable 
           key={tableRefreshKey}
           dateRange={dateRange} 
           onDataLoaded={setPricingData}
-          updatedDates={updatedDates}
-          pendingDates={pendingDates}
         />
         
         <div className="mt-6 rounded-lg border bg-card p-4 shadow-sm">

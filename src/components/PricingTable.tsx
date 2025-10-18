@@ -17,8 +17,6 @@ interface PricingData {
 interface PricingTableProps {
   dateRange?: DateRange;
   onDataLoaded?: (data: any[]) => void;
-  updatedDates?: Set<string>;
-  pendingDates?: Set<string>;
 }
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -34,7 +32,7 @@ const getDayName = (dateStr: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-export const PricingTable = ({ dateRange, onDataLoaded, updatedDates, pendingDates }: PricingTableProps) => {
+export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,15 +171,7 @@ export const PricingTable = ({ dateRange, onDataLoaded, updatedDates, pendingDat
                 <span className="text-[10px] text-muted-foreground">{row.day}</span>
               </td>
               <td className="p-2 text-xs font-medium">
-                <div className="flex items-center gap-1.5">
-                  <span>{row.date}</span>
-                  {pendingDates?.has(row.isoDate) && (
-                    <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                  )}
-                  {updatedDates?.has(row.isoDate) && (
-                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
-                  )}
-                </div>
+                {row.date}
               </td>
               <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
                 <div className="flex items-center gap-1.5">

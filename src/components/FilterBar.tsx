@@ -8,21 +8,15 @@ import { DateRange } from "react-day-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface FilterBarProps {
-  onRefresh?: () => void;
-  isRefreshing?: boolean;
   dateRange?: DateRange;
   onDateRangeChange?: (range: DateRange | undefined) => void;
   onExport?: () => void;
-  scrapingProgress?: number;
 }
 
 export const FilterBar = ({ 
-  onRefresh = () => {}, 
-  isRefreshing = false,
   dateRange,
   onDateRangeChange = () => {},
   onExport = () => {},
-  scrapingProgress = 0,
 }: FilterBarProps) => {
   return (
     <div className="border-b bg-card px-6 py-4">
@@ -75,23 +69,6 @@ export const FilterBar = ({
             <Download className="h-4 w-4" />
             Export
           </Button>
-          
-          <div className="relative">
-            <Button 
-              size="sm" 
-              className="gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow-lg"
-              onClick={onRefresh} 
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-              {isRefreshing ? `Scraping... ${scrapingProgress}%` : "Refresh rates"}
-            </Button>
-            {isRefreshing && scrapingProgress > 0 && (
-              <div className="absolute bottom-0 left-0 h-1 bg-yellow-600 rounded-full transition-all duration-300"
-                style={{ width: `${scrapingProgress}%` }}
-              />
-            )}
-          </div>
         </div>
       </div>
     </div>
