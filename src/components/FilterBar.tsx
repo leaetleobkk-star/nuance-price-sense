@@ -11,12 +11,16 @@ interface FilterBarProps {
   dateRange?: DateRange;
   onDateRangeChange?: (range: DateRange | undefined) => void;
   onExport?: () => void;
+  adults?: number;
+  onAdultsChange?: (adults: number) => void;
 }
 
 export const FilterBar = ({ 
   dateRange,
   onDateRangeChange = () => {},
   onExport = () => {},
+  adults = 2,
+  onAdultsChange = () => {},
 }: FilterBarProps) => {
   return (
     <div className="border-b bg-card px-6 py-4">
@@ -53,7 +57,7 @@ export const FilterBar = ({
           
           <div className="h-6 w-px bg-border" />
           
-          <Select defaultValue="2">
+          <Select value={adults.toString()} onValueChange={(value) => onAdultsChange(parseInt(value))}>
             <SelectTrigger className="h-9 w-[120px]">
               <SelectValue />
             </SelectTrigger>

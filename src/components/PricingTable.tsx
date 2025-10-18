@@ -25,6 +25,7 @@ interface PricingData {
 interface PricingTableProps {
   dateRange?: DateRange;
   onDataLoaded?: (data: any[]) => void;
+  adults?: number;
 }
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -40,7 +41,7 @@ const getDayName = (dateStr: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => {
+export const PricingTable = ({ dateRange, onDataLoaded, adults = 2 }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,7 +53,7 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
       setPricingData([]);
       setIsLoading(false);
     }
-  }, [selectedProperty, competitors, dateRange]);
+  }, [selectedProperty, competitors, dateRange, adults]);
 
   const fetchPricingData = async () => {
     if (!dateRange?.from || !dateRange?.to) return;
@@ -68,12 +69,13 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
         dates.push(new Date(date).toISOString().split('T')[0]);
       }
 
-      // Fetch current and previous scraped rates for competitors and property
+      // Fetch current and previous scraped rates for competitors and property, filtered by adults
       const [compRes, myRes, compPrevRes, myPrevRes] = await Promise.all([
         supabase
           .from('scraped_rates')
           .select('*')
           .in('competitor_id', competitors.map(c => c.id))
+          .eq('adults', adults)
           .gte('check_in_date', dates[0])
           .lte('check_in_date', dates[dates.length - 1])
           .order('check_in_date')
@@ -82,6 +84,7 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
           .from('scraped_rates')
           .select('*')
           .eq('property_id', selectedProperty.id)
+          .eq('adults', adults)
           .gte('check_in_date', dates[0])
           .lte('check_in_date', dates[dates.length - 1])
           .order('check_in_date')
@@ -91,6 +94,7 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
           .from('scraped_rates')
           .select('*')
           .in('competitor_id', competitors.map(c => c.id))
+          .eq('adults', adults)
           .gte('check_in_date', dates[0])
           .lte('check_in_date', dates[dates.length - 1])
           .order('scraped_at', { ascending: false }),
@@ -98,6 +102,7 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
           .from('scraped_rates')
           .select('*')
           .eq('property_id', selectedProperty.id)
+          .eq('adults', adults)
           .gte('check_in_date', dates[0])
           .lte('check_in_date', dates[dates.length - 1])
           .order('scraped_at', { ascending: false }),

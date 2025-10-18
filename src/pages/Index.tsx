@@ -34,6 +34,7 @@ const IndexContent = () => {
     from: new Date(),
     to: addDays(new Date(), 30),
   });
+  const [adults, setAdults] = useState(2);
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
   const [isRefreshingFromCSV, setIsRefreshingFromCSV] = useState(false);
@@ -444,6 +445,8 @@ const IndexContent = () => {
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onExport={handleExportCSV}
+        adults={adults}
+        onAdultsChange={setAdults}
       />
       
       <div className="px-6 py-4 border-b bg-card">
@@ -469,6 +472,7 @@ const IndexContent = () => {
           key={tableRefreshKey}
           dateRange={dateRange} 
           onDataLoaded={setPricingData}
+          adults={adults}
         />
         
         <div className="mt-6 rounded-lg border bg-card p-4 shadow-sm">
