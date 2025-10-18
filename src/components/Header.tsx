@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Settings, User } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export const Header = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   return (
     <header className="border-b bg-card shadow-sm">
       <div className="flex h-16 items-center justify-between px-6">
@@ -11,8 +15,19 @@ export const Header = () => {
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
               Overview
             </Button>
-            <Button variant="ghost" className="bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary">
+            <Button 
+              variant="ghost" 
+              className={location.pathname === "/" ? "bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
+              onClick={() => navigate("/")}
+            >
               Rates
+            </Button>
+            <Button 
+              variant="ghost" 
+              className={location.pathname === "/competitors" ? "bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary" : "text-muted-foreground hover:text-foreground"}
+              onClick={() => navigate("/competitors")}
+            >
+              Competitors
             </Button>
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
               BI
