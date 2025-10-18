@@ -29,7 +29,10 @@ const USER_AGENTS = [
 function extractPrice(content: string): number | null {
   console.log('Attempting to extract price from content...');
 
-  const candidates: number[] = [];
+   const strong: number[] = [];
+   const weak: number[] = [];
+   const badCtx = ['breakfast', 'per person', 'per child', 'tax', 'fee', 'service', 'deposit', 'reviews', 'review', 'rating', 'score', 'points', 'meter', 'metre', 'm ', ' km', 'distance'];
+   const goodCtx = ['total', '1 night', 'per night', 'night', 'room', 'price', 'lowest', 'includes taxes', 'incl. taxes', 'taxes included'];
   
   // Strategy 1: Look for price in markdown format (from Firecrawl)
   const markdownPricePatterns = [
@@ -43,8 +46,16 @@ function extractPrice(content: string): number | null {
     for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
        const price = parseInt(priceStr, 10);
-       if (!isNaN(price) && price > 1000 && price < 50000) {
-        candidates.push(price);
+       if (!isNaN(price) && price > 1500 && price < 50000) {
+        const idx = (match as any).index ?? content.indexOf(match[0]);
+        const ctx = content.slice(Math.max(0, idx - 60), Math.min(content.length, idx + 60)).toLowerCase();
+        if (badCtx.some(k => ctx.includes(k))) {
+          // skip breakfast/taxes/etc.
+        } else if (goodCtx.some(k => ctx.includes(k))) {
+          strong.push(price);
+        } else {
+          weak.push(price);
+        }
       }
     }
   }
@@ -61,22 +72,30 @@ function extractPrice(content: string): number | null {
     for (const match of matches) {
       const priceStr = match[1].replace(/,/g, '').replace(/\s/g, '');
        const price = parseInt(priceStr, 10);
-       if (!isNaN(price) && price > 1000 && price < 50000) {
-        candidates.push(price);
+       if (!isNaN(price) && price > 1500 && price < 50000) {
+        const idx = (match as any).index ?? content.indexOf(match[0]);
+        const ctx = content.slice(Math.max(0, idx - 60), Math.min(content.length, idx + 60)).toLowerCase();
+        if (badCtx.some(k => ctx.includes(k))) {
+          // skip breakfast/taxes/etc.
+        } else if (goodCtx.some(k => ctx.includes(k))) {
+          strong.push(price);
+        } else {
+          weak.push(price);
+        }
       }
     }
   }
 
-   if (candidates.length) {
-     const filtered = candidates.filter(p => p >= 1000 && p <= 50000).sort((a,b) => a - b);
-     if (filtered.length) {
-       const median = filtered[Math.floor(filtered.length / 2)];
-       console.log(`Selected median price ${median} THB from ${filtered.length}/${candidates.length} candidates`);
+   if (strong.length || weak.length) {
+     const base = (strong.length ? strong : weak).filter((p: number) => p >= 1500 && p <= 50000).sort((a: number, b: number) => a - b);
+     if (base.length) {
+       const median = base[Math.floor(base.length / 2)];
+       console.log(`Selected median price ${median} THB from ${base.length} candidates (strong=${strong.length}, weak=${weak.length})`);
        return median;
      }
-     const best = Math.min(...candidates);
-     console.log(`Selected fallback best price ${best} THB from ${candidates.length} candidates`);
-     return best;
+     const fallback = Math.min(...(strong.length ? strong : weak));
+     console.log(`Selected fallback best price ${fallback} THB from ${(strong.length ? strong : weak).length} candidates`);
+     return fallback;
    }
   
   console.log('No valid price found in content');
