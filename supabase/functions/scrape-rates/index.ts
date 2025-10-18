@@ -108,7 +108,7 @@ async function scrapeBookingRate(url: string, checkInDate: string, firecrawlApiK
           url: targetUrl,
           formats: ['markdown', 'html'],
           onlyMainContent: false,
-          waitFor: 3000,
+          waitFor: 1200,
         }),
       });
 
@@ -295,7 +295,7 @@ const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY') || undefined;
           console.log(`Progress: ${progress}% (${completed}/${total})`);
           
           // Longer delay between requests to be respectful and ensure quality
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error) {
           console.error(`Error scraping ${hotel.name} for ${checkInDate}:`, error);
           completed++;
