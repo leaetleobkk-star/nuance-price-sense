@@ -16,7 +16,7 @@ export type Database = {
     Tables: {
       competitors: {
         Row: {
-          booking_url: string
+          booking_url: string | null
           created_at: string
           id: string
           name: string
@@ -24,7 +24,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          booking_url: string
+          booking_url?: string | null
           created_at?: string
           id?: string
           name: string
@@ -32,7 +32,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          booking_url?: string
+          booking_url?: string | null
           created_at?: string
           id?: string
           name?: string
