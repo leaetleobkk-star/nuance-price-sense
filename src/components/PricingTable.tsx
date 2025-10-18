@@ -1,17 +1,25 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TrendingDown, TrendingUp, ExternalLink } from "lucide-react";
 import { useProperty } from "@/contexts/PropertyContext";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
 
+interface RateDetail {
+  price: number | string;
+  roomType: string | null;
+  previousPrice?: number;
+  percentChange?: number;
+}
+
 interface PricingData {
   isoDate: string;
   date: string;
   day: string;
-  myProperty: number | string;
-  competitorPrices: Record<string, number | string>;
+  myProperty: RateDetail;
+  competitorPrices: Record<string, RateDetail>;
 }
 
 interface PricingTableProps {
@@ -60,50 +68,126 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
         dates.push(new Date(date).toISOString().split('T')[0]);
       }
 
-      // Fetch scraped rates for competitors and your property in parallel
-      const [compRes, myRes] = await Promise.all([
+      // Fetch current and previous scraped rates for competitors and property
+      const [compRes, myRes, compPrevRes, myPrevRes] = await Promise.all([
         supabase
           .from('scraped_rates')
           .select('*')
           .in('competitor_id', competitors.map(c => c.id))
           .gte('check_in_date', dates[0])
           .lte('check_in_date', dates[dates.length - 1])
-          .order('check_in_date'),
+          .order('check_in_date')
+          .order('scraped_at', { ascending: false }),
         supabase
           .from('scraped_rates')
           .select('*')
           .eq('property_id', selectedProperty.id)
           .gte('check_in_date', dates[0])
           .lte('check_in_date', dates[dates.length - 1])
-          .order('check_in_date'),
+          .order('check_in_date')
+          .order('scraped_at', { ascending: false }),
+        // Get previous rates (older scraped_at)
+        supabase
+          .from('scraped_rates')
+          .select('*')
+          .in('competitor_id', competitors.map(c => c.id))
+          .gte('check_in_date', dates[0])
+          .lte('check_in_date', dates[dates.length - 1])
+          .order('scraped_at', { ascending: false }),
+        supabase
+          .from('scraped_rates')
+          .select('*')
+          .eq('property_id', selectedProperty.id)
+          .gte('check_in_date', dates[0])
+          .lte('check_in_date', dates[dates.length - 1])
+          .order('scraped_at', { ascending: false }),
       ]);
 
-      const rates = compRes.data;
-      const myRates = myRes.data;
+      const rates = compRes.data || [];
+      const myRates = myRes.data || [];
+      const prevRates = compPrevRes.data || [];
+      const myPrevRates = myPrevRes.data || [];
 
       if (compRes.error || myRes.error) {
         console.error('Error fetching rates:', compRes.error || myRes.error);
         return;
       }
 
+      // Helper to get previous rate
+      const getPreviousRate = (currentRate: any, isProperty: boolean) => {
+        const prevData = isProperty ? myPrevRates : prevRates;
+        const identifier = isProperty ? 'property_id' : 'competitor_id';
+        const idValue = isProperty ? selectedProperty.id : currentRate.competitor_id;
+
+        // Find the previous rate for the same date but with older scraped_at
+        const previous = prevData
+          .filter(r => 
+            r[identifier] === idValue && 
+            r.check_in_date === currentRate.check_in_date &&
+            r.scraped_at < currentRate.scraped_at
+          )
+          .sort((a, b) => new Date(b.scraped_at).getTime() - new Date(a.scraped_at).getTime())[0];
+
+        return previous;
+      };
+
       // Transform data into table format
       const tableData: PricingData[] = dates.map(date => {
-        const competitorPrices: Record<string, number | string> = {};
+        const competitorPrices: Record<string, RateDetail> = {};
         
         competitors.forEach(comp => {
-          const rate = rates?.find(r => 
+          const rate = rates.find(r => 
             r.competitor_id === comp.id && 
             r.check_in_date === date
           );
-          competitorPrices[comp.id] = rate ? rate.price_amount : 'No data';
+          
+          if (rate) {
+            const prevRate = getPreviousRate(rate, false);
+            const currentPrice = Number(rate.price_amount);
+            const previousPrice = prevRate ? Number(prevRate.price_amount) : undefined;
+            const percentChange = previousPrice ? ((currentPrice - previousPrice) / previousPrice) * 100 : undefined;
+
+            competitorPrices[comp.id] = {
+              price: currentPrice,
+              roomType: rate.room_type,
+              previousPrice,
+              percentChange,
+            };
+          } else {
+            competitorPrices[comp.id] = {
+              price: 'No data',
+              roomType: null,
+            };
+          }
         });
-        const myRate = myRates?.find(r => r.property_id === selectedProperty.id && r.check_in_date === date);
+
+        const myRate = myRates.find(r => r.property_id === selectedProperty.id && r.check_in_date === date);
+        let myPropertyDetail: RateDetail;
+
+        if (myRate) {
+          const prevRate = getPreviousRate(myRate, true);
+          const currentPrice = Number(myRate.price_amount);
+          const previousPrice = prevRate ? Number(prevRate.price_amount) : undefined;
+          const percentChange = previousPrice ? ((currentPrice - previousPrice) / previousPrice) * 100 : undefined;
+
+          myPropertyDetail = {
+            price: currentPrice,
+            roomType: myRate.room_type,
+            previousPrice,
+            percentChange,
+          };
+        } else {
+          myPropertyDetail = {
+            price: 'No data',
+            roomType: null,
+          };
+        }
 
         return {
           isoDate: date,
           date: new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
           day: getDayName(date),
-          myProperty: myRate ? Number(myRate.price_amount) : 'No data',
+          myProperty: myPropertyDetail,
           competitorPrices,
         };
       });
@@ -146,6 +230,60 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
     );
   }
 
+  const renderPriceCell = (detail: RateDetail, bookingUrl: string | null, isMyProperty: boolean = false) => {
+    if (typeof detail.price === 'string') {
+      return <span className="text-muted-foreground text-[10px]">{detail.price}</span>;
+    }
+
+    const hasSignificantChange = detail.percentChange && Math.abs(detail.percentChange) >= 10;
+    const myPropertyPrice = typeof pricingData[0]?.myProperty.price === 'number' ? pricingData[0].myProperty.price : 0;
+
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className={cn(
+            "text-xs font-medium",
+            isMyProperty ? "font-semibold text-orange-600 dark:text-orange-400" : getPriceClass(detail.price, myPropertyPrice)
+          )}>
+            ฿ {detail.price.toLocaleString()}
+          </span>
+          {!isMyProperty && detail.price > myPropertyPrice && (
+            <TrendingUp className="h-2.5 w-2.5 text-destructive" />
+          )}
+          {!isMyProperty && detail.price < myPropertyPrice && (
+            <TrendingDown className="h-2.5 w-2.5 text-success" />
+          )}
+          {hasSignificantChange && (
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "text-[9px] px-1 py-0 h-4",
+                detail.percentChange! > 0 ? "text-destructive border-destructive" : "text-success border-success"
+              )}
+            >
+              {detail.percentChange! > 0 ? '+' : ''}{detail.percentChange!.toFixed(1)}%
+            </Badge>
+          )}
+        </div>
+        {detail.roomType && (
+          <span className="text-[9px] text-muted-foreground truncate max-w-[120px]">
+            {detail.roomType}
+          </span>
+        )}
+        {bookingUrl && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-5 text-[9px] px-1.5 gap-1 w-fit"
+            onClick={() => window.open(bookingUrl, '_blank')}
+          >
+            Book <ExternalLink className="h-2.5 w-2.5" />
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="overflow-auto">
       <table className="w-full border-collapse text-xs">
@@ -174,31 +312,13 @@ export const PricingTable = ({ dateRange, onDataLoaded }: PricingTableProps) => 
                 {row.date}
               </td>
               <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">
-                    ฿ {typeof row.myProperty === 'number' ? row.myProperty.toLocaleString() : row.myProperty}
-                  </span>
-                </div>
+                {renderPriceCell(row.myProperty, selectedProperty.booking_url, true)}
               </td>
               {competitors.map((comp) => {
-                const price = row.competitorPrices[comp.id];
+                const detail = row.competitorPrices[comp.id];
                 return (
                   <td key={comp.id} className="p-2">
-                    {typeof price === 'number' ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn("text-xs font-medium", getPriceClass(price, typeof row.myProperty === 'number' ? row.myProperty : 0))}>
-                          ฿ {price.toLocaleString()}
-                        </span>
-                        {price > (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
-                          <TrendingUp className="h-2.5 w-2.5 text-destructive" />
-                        )}
-                        {price < (typeof row.myProperty === 'number' ? row.myProperty : 0) && (
-                          <TrendingDown className="h-2.5 w-2.5 text-success" />
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-[10px]">{price}</span>
-                    )}
+                    {renderPriceCell(detail, comp.booking_url)}
                   </td>
                 );
               })}

@@ -12,11 +12,18 @@ import { addDays } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 
+interface RateDetail {
+  price: number | string;
+  roomType: string | null;
+  previousPrice?: number;
+  percentChange?: number;
+}
+
 interface PricingData {
   date: string;
   day: string;
-  myProperty: number | string;
-  competitorPrices: Record<string, number | string>;
+  myProperty: RateDetail;
+  competitorPrices: Record<string, RateDetail>;
 }
 
 const IndexContent = () => {
@@ -301,11 +308,16 @@ const IndexContent = () => {
     let marketRateCount = 0;
 
     pricingData.forEach(row => {
-      const myPrice = typeof row.myProperty === 'number' ? row.myProperty : 0;
+      if (!row.myProperty) return;
+      const myPrice = typeof row.myProperty === 'number' ? row.myProperty : (typeof row.myProperty === 'object' && row.myProperty && typeof row.myProperty.price === 'number' ? row.myProperty.price : 0);
       if (myPrice === 0) return;
 
       const competitorPrices = Object.values(row.competitorPrices)
-        .filter((p): p is number => typeof p === 'number');
+        .map(cp => {
+          if (!cp) return null;
+          return typeof cp === 'number' ? cp : (typeof cp === 'object' && cp && typeof cp.price === 'number' ? cp.price : null);
+        })
+        .filter((p): p is number => p !== null && p > 0);
 
       if (competitorPrices.length === 0) return;
 
@@ -345,15 +357,22 @@ const IndexContent = () => {
     const headers = ['Date', 'Day', selectedProperty.name, ...competitors.map(c => c.name)];
     
     const rows = pricingData.map(row => {
+      const myPropertyPrice = !row.myProperty ? 'No data' : 
+        typeof row.myProperty === 'number' ? row.myProperty : 
+        (typeof row.myProperty === 'object' && row.myProperty && typeof row.myProperty.price === 'number' ? row.myProperty.price : 'No data');
+      
       const competitorPrices = competitors.map(c => {
-        const price = row.competitorPrices[c.id];
+        const detail = row.competitorPrices[c.id];
+        if (!detail) return 'No data';
+        const price = typeof detail === 'number' ? detail : 
+          (typeof detail === 'object' && detail && typeof detail.price === 'number' ? detail.price : 'No data');
         return typeof price === 'number' ? price.toString() : price;
       });
       
       return [
         row.date,
         row.day,
-        typeof row.myProperty === 'number' ? row.myProperty.toString() : row.myProperty,
+        typeof myPropertyPrice === 'number' ? myPropertyPrice.toString() : myPropertyPrice,
         ...competitorPrices
       ];
     });
