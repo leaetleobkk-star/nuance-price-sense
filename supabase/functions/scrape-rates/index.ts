@@ -174,6 +174,54 @@ function extractBestPairs(html: string): Array<[string, number]> {
   return pairs;
 }
 
+async function scrapeWithScrapingBee(url: string, checkInDate: string, scrapingBeeApiKey: string, adults: number): Promise<{ price: number | null, roomType: string | null }> {
+  const checkIn = checkInDate;
+  const checkOutDate = new Date(checkInDate);
+  checkOutDate.setDate(checkOutDate.getDate() + 1);
+  const checkOut = checkOutDate.toISOString().split('T')[0];
+
+  const currency = inferCurrency(url);
+  const params = new URLSearchParams({
+    checkin: checkIn,
+    checkout: checkOut,
+    group_adults: adults.toString(),
+    no_rooms: "1",
+    sb_price_type: "total",
+    selected_currency: currency,
+    do_availability_check: "1",
+    src: "hotel"
+  });
+
+  const fullUrl = `${url}?${params.toString()}`;
+
+  try {
+    console.log(`ScrapingBee fetch: ${fullUrl} (adults=${adults})`);
+    const scrapingBeeUrl = `https://app.scrapingbee.com/api/v1/?api_key=${scrapingBeeApiKey}&url=${encodeURIComponent(fullUrl)}&render_js=false&premium_proxy=true`;
+    
+    const response = await fetch(scrapingBeeUrl);
+
+    if (!response.ok) {
+      console.log(`ScrapingBee failed: HTTP ${response.status}`);
+      return { price: null, roomType: null };
+    }
+
+    const html = await response.text();
+    const pairs = extractBestPairs(html);
+    
+    if (pairs.length > 0) {
+      const [roomName, price] = pairs[0]; // Cheapest room
+      console.log(`ScrapingBee found: ${roomName} at ${price} ${currency} (adults=${adults})`);
+      return { price, roomType: roomName };
+    }
+
+    console.log(`ScrapingBee: no prices found (adults=${adults})`);
+    return { price: null, roomType: null };
+  } catch (error) {
+    console.error(`ScrapingBee error (adults=${adults}):`, error);
+    return { price: null, roomType: null };
+  }
+}
+
 async function scrapeDirectHTTP(url: string, checkInDate: string, adults: number): Promise<{ price: number | null, roomType: string | null }> {
   const checkIn = checkInDate;
   const checkOutDate = new Date(checkInDate);
@@ -296,9 +344,11 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY') || undefined;
-    if (!firecrawlApiKey) {
-      console.warn('FIRECRAWL_API_KEY not configured - will use direct fetch fallback');
+    const scrapingBeeApiKey = Deno.env.get('SCRAPINGBEE_API_KEY');
+    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    
+    if (!scrapingBeeApiKey) {
+      console.warn('SCRAPINGBEE_API_KEY not configured - will use fallback methods');
     }
     
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -355,10 +405,20 @@ const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY') || undefined;
           try {
             console.log(`Scraping ${hotel.name} for ${checkInDate} (adults=${adults})...`);
             
-            // Try direct HTTP first
-            let result = await scrapeDirectHTTP(hotel.url, checkInDate, adults);
+            let result = { price: null as number | null, roomType: null as string | null };
             
-            // Fallback to Firecrawl if direct failed
+            // Priority 1: ScrapingBee (fastest and most reliable)
+            if (scrapingBeeApiKey) {
+              result = await scrapeWithScrapingBee(hotel.url, checkInDate, scrapingBeeApiKey, adults);
+            }
+            
+            // Priority 2: Direct HTTP fallback
+            if (result.price === null) {
+              console.log(`ScrapingBee failed, trying direct HTTP (adults=${adults})...`);
+              result = await scrapeDirectHTTP(hotel.url, checkInDate, adults);
+            }
+            
+            // Priority 3: Firecrawl fallback
             if (result.price === null && firecrawlApiKey) {
               console.log(`Direct failed, trying Firecrawl (adults=${adults})...`);
               result = await scrapeWithFirecrawl(hotel.url, checkInDate, firecrawlApiKey, adults);
