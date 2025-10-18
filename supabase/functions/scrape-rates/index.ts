@@ -193,33 +193,68 @@ async function scrapeWithScrapingBee(url: string, checkInDate: string, scrapingB
   });
 
   const fullUrl = `${url}?${params.toString()}`;
+  const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
-  try {
-    console.log(`ScrapingBee fetch: ${fullUrl} (adults=${adults})`);
-    const scrapingBeeUrl = `https://app.scrapingbee.com/api/v1/?api_key=${scrapingBeeApiKey}&url=${encodeURIComponent(fullUrl)}&render_js=false&premium_proxy=true`;
-    
-    const response = await fetch(scrapingBeeUrl);
+  // ScrapingBee parameters optimized for speed and reliability
+  const scrapingBeeParams = new URLSearchParams({
+    api_key: scrapingBeeApiKey,
+    url: fullUrl,
+    render_js: "true",              // Enable JS rendering for dynamic content
+    stealth_proxy: "true",          // Stealth mode to avoid detection
+    block_resources: "true",        // Block images/fonts for faster loading
+    wait: "15000",                  // Wait up to 15s for content
+    timeout: "30000",               // 30s total timeout
+    wait_for: "table#hprt-table,[data-testid='price-for-x-nights'],[data-testid='price-and-discounted-price']",
+  });
 
-    if (!response.ok) {
+  const scrapingBeeUrl = `https://app.scrapingbee.com/api/v1/?${scrapingBeeParams.toString()}`;
+
+  // Retry logic with exponential backoff
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`ScrapingBee attempt ${attempt}/3: ${fullUrl} (adults=${adults})`);
+      
+      const response = await fetch(scrapingBeeUrl, {
+        headers: {
+          "User-Agent": userAgent,
+        },
+      });
+
+      if (response.status === 200) {
+        const html = await response.text();
+        const pairs = extractBestPairs(html);
+        
+        if (pairs.length > 0) {
+          const [roomName, price] = pairs[0]; // Cheapest room
+          console.log(`ScrapingBee found: ${roomName} at ${price} ${currency} (adults=${adults})`);
+          return { price, roomType: roomName };
+        }
+
+        console.log(`ScrapingBee: no prices found (adults=${adults})`);
+        return { price: null, roomType: null };
+      }
+
+      // Retry on rate limit or server errors
+      if ([429, 500, 502, 503, 504].includes(response.status)) {
+        const waitTime = Math.min(1000 * attempt ** 2, 5000);
+        console.log(`ScrapingBee status ${response.status}, retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+
       console.log(`ScrapingBee failed: HTTP ${response.status}`);
       return { price: null, roomType: null };
+    } catch (error) {
+      console.error(`ScrapingBee attempt ${attempt} error (adults=${adults}):`, error);
+      if (attempt < 3) {
+        const waitTime = Math.min(500 * attempt ** 2, 4000);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
-
-    const html = await response.text();
-    const pairs = extractBestPairs(html);
-    
-    if (pairs.length > 0) {
-      const [roomName, price] = pairs[0]; // Cheapest room
-      console.log(`ScrapingBee found: ${roomName} at ${price} ${currency} (adults=${adults})`);
-      return { price, roomType: roomName };
-    }
-
-    console.log(`ScrapingBee: no prices found (adults=${adults})`);
-    return { price: null, roomType: null };
-  } catch (error) {
-    console.error(`ScrapingBee error (adults=${adults}):`, error);
-    return { price: null, roomType: null };
   }
+
+  console.log(`ScrapingBee: all retries exhausted (adults=${adults})`);
+  return { price: null, roomType: null };
 }
 
 async function scrapeDirectHTTP(url: string, checkInDate: string, adults: number): Promise<{ price: number | null, roomType: string | null }> {
@@ -471,8 +506,8 @@ Deno.serve(async (req) => {
               console.log(`✗ No price found for ${hotel.name} ${checkInDate} (adults=${adults})`);
             }
             
-            // Small delay between requests
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Minimal delay - ScrapingBee handles rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
           } catch (error) {
             console.error(`Error scraping ${hotel.name} for ${checkInDate} (adults=${adults}):`, error);
             completed++;
