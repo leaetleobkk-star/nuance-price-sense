@@ -49,6 +49,54 @@ export type Database = {
           },
         ]
       }
+      csv_uploads: {
+        Row: {
+          competitor_id: string | null
+          file_name: string
+          file_path: string
+          id: string
+          property_id: string | null
+          record_count: number
+          uploaded_at: string
+          user_id: string
+        }
+        Insert: {
+          competitor_id?: string | null
+          file_name: string
+          file_path: string
+          id?: string
+          property_id?: string | null
+          record_count?: number
+          uploaded_at?: string
+          user_id: string
+        }
+        Update: {
+          competitor_id?: string | null
+          file_name?: string
+          file_path?: string
+          id?: string
+          property_id?: string | null
+          record_count?: number
+          uploaded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "csv_uploads_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "csv_uploads_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       properties: {
         Row: {
           booking_url: string | null
@@ -138,7 +186,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_old_csv_uploads: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

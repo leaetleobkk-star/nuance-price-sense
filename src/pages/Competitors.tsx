@@ -4,12 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { PropertySelector } from "@/components/PropertySelector";
 import { useProperty } from "@/contexts/PropertyContext";
+import { CSVUploadHistory } from "@/components/CSVUploadHistory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, ExternalLink } from "lucide-react";
 
@@ -233,13 +235,19 @@ const Competitors = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // Store CSV file in storage
-      const filePath = `${session.user.id}/competitor_${selectedCompetitorId}.csv`;
+      // Store CSV file in storage with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filePath = `${session.user.id}/competitor_${selectedCompetitorId}_${timestamp}.csv`;
       const { error: uploadError } = await supabase.storage
         .from('rate-csvs')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file);
 
       if (uploadError) throw uploadError;
+
+      // Delete existing rates for this competitor to avoid duplicates
+      await supabase.from('scraped_rates')
+        .delete()
+        .eq('competitor_id', selectedCompetitorId);
 
       // Insert rates into database
       const ratesToInsert = rates.map(rate => {
@@ -258,6 +266,15 @@ const Competitors = () => {
       const { error } = await supabase.from('scraped_rates').insert(ratesToInsert);
 
       if (error) throw error;
+
+      // Track upload in history
+      await supabase.from('csv_uploads').insert({
+        user_id: session.user.id,
+        competitor_id: selectedCompetitorId,
+        file_name: file.name,
+        file_path: filePath,
+        record_count: rates.length,
+      });
 
       toast({
         title: "Success",
@@ -296,13 +313,19 @@ const Competitors = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // Store CSV file in storage
-      const filePath = `${session.user.id}/property_${selectedProperty.id}.csv`;
+      // Store CSV file in storage with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filePath = `${session.user.id}/property_${selectedProperty.id}_${timestamp}.csv`;
       const { error: uploadError } = await supabase.storage
         .from('rate-csvs')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file);
 
       if (uploadError) throw uploadError;
+
+      // Delete existing rates for this property to avoid duplicates
+      await supabase.from('scraped_rates')
+        .delete()
+        .eq('property_id', selectedProperty.id);
 
       // Insert rates into database
       const ratesToInsert = rates.map(rate => {
@@ -321,6 +344,15 @@ const Competitors = () => {
       const { error } = await supabase.from('scraped_rates').insert(ratesToInsert);
 
       if (error) throw error;
+
+      // Track upload in history
+      await supabase.from('csv_uploads').insert({
+        user_id: session.user.id,
+        property_id: selectedProperty.id,
+        file_name: file.name,
+        file_path: filePath,
+        record_count: rates.length,
+      });
 
       toast({
         title: "Success",
@@ -622,6 +654,40 @@ const Competitors = () => {
                   )}
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Upload History Section */}
+            <div className="mt-6">
+              <Tabs defaultValue="property">
+                <TabsList>
+                  <TabsTrigger value="property">Property Uploads</TabsTrigger>
+                  <TabsTrigger value="competitors">Competitor Uploads</TabsTrigger>
+                </TabsList>
+                <TabsContent value="property" className="mt-4">
+                  {selectedProperty && (
+                    <CSVUploadHistory 
+                      propertyId={selectedProperty.id}
+                      entityName={selectedProperty.name}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="competitors" className="mt-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {competitors.map((competitor) => (
+                      <CSVUploadHistory 
+                        key={competitor.id}
+                        competitorId={competitor.id}
+                        entityName={competitor.name}
+                      />
+                    ))}
+                    {competitors.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-8 col-span-2">
+                        No competitors configured
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           </>
         )}
