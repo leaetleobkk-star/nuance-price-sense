@@ -14,7 +14,112 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      competitors: {
+        Row: {
+          booking_url: string
+          created_at: string
+          id: string
+          name: string
+          property_id: string
+          updated_at: string
+        }
+        Insert: {
+          booking_url: string
+          created_at?: string
+          id?: string
+          name: string
+          property_id: string
+          updated_at?: string
+        }
+        Update: {
+          booking_url?: string
+          created_at?: string
+          id?: string
+          name?: string
+          property_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitors_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      properties: {
+        Row: {
+          booking_url: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          booking_url?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          booking_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scraped_rates: {
+        Row: {
+          check_in_date: string
+          check_out_date: string
+          competitor_id: string
+          created_at: string
+          currency: string
+          id: string
+          price_amount: number
+          room_type: string | null
+          scraped_at: string
+        }
+        Insert: {
+          check_in_date: string
+          check_out_date: string
+          competitor_id: string
+          created_at?: string
+          currency?: string
+          id?: string
+          price_amount: number
+          room_type?: string | null
+          scraped_at?: string
+        }
+        Update: {
+          check_in_date?: string
+          check_out_date?: string
+          competitor_id?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          price_amount?: number
+          room_type?: string | null
+          scraped_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scraped_rates_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
