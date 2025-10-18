@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
+import { PropertySelector } from "@/components/PropertySelector";
+import { useProperty } from "@/contexts/PropertyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,25 +28,24 @@ interface Competitor {
 const Competitors = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [properties, setProperties] = useState<Property[]>([]);
+  const { selectedProperty } = useProperty();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string>("");
   const [newCompetitorName, setNewCompetitorName] = useState("");
   const [newCompetitorUrl, setNewCompetitorUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingCompetitor, setIsUploadingCompetitor] = useState(false);
+  const [isUploadingProperty, setIsUploadingProperty] = useState(false);
 
   useEffect(() => {
     checkAuth();
-    fetchProperties();
   }, []);
 
   useEffect(() => {
-    if (selectedPropertyId) {
-      fetchCompetitors(selectedPropertyId);
+    if (selectedProperty) {
+      fetchCompetitors(selectedProperty.id);
     }
-  }, [selectedPropertyId]);
+  }, [selectedProperty]);
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -53,25 +54,6 @@ const Competitors = () => {
     }
   };
 
-  const fetchProperties = async () => {
-    const { data, error } = await supabase
-      .from("properties")
-      .select("*")
-      .order("name");
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load properties",
-        variant: "destructive",
-      });
-    } else if (data) {
-      setProperties(data);
-      if (data.length > 0 && !selectedPropertyId) {
-        setSelectedPropertyId(data[0].id);
-      }
-    }
-  };
 
   const fetchCompetitors = async (propertyId: string) => {
     const { data, error } = await supabase
@@ -93,11 +75,11 @@ const Competitors = () => {
 
   const handleAddCompetitor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPropertyId) return;
+    if (!selectedProperty) return;
 
     setIsLoading(true);
     const { error } = await supabase.from("competitors").insert({
-      property_id: selectedPropertyId,
+      property_id: selectedProperty.id,
       name: newCompetitorName,
       booking_url: newCompetitorUrl || null,
     });
@@ -117,7 +99,7 @@ const Competitors = () => {
       });
       setNewCompetitorName("");
       setNewCompetitorUrl("");
-      fetchCompetitors(selectedPropertyId);
+      fetchCompetitors(selectedProperty.id);
     }
   };
 
@@ -150,9 +132,14 @@ const Competitors = () => {
       
       if (!dateStr) continue;
 
-      // Parse date (M/D/YYYY format)
-      const [month, day, year] = dateStr.split('/');
-      const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      // Parse date - handle both YYYY-MM-DD and M/D/YYYY formats
+      let isoDate: string;
+      if (dateStr.includes('/')) {
+        const [month, day, year] = dateStr.split('/');
+        isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      } else {
+        isoDate = dateStr; // Already in YYYY-MM-DD format
+      }
 
       // Add A1 (1 adult) rate if available
       if (roomA1Idx !== -1 && priceA1Idx !== -1) {
@@ -186,11 +173,11 @@ const Competitors = () => {
     return rates;
   };
 
-  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCompetitorCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedCompetitorId) return;
 
-    setIsUploading(true);
+    setIsUploadingCompetitor(true);
     
     try {
       const text = await file.text();
@@ -233,7 +220,58 @@ const Competitors = () => {
         variant: "destructive",
       });
     } finally {
-      setIsUploading(false);
+      setIsUploadingCompetitor(false);
+    }
+  };
+
+  const handlePropertyCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedProperty) return;
+
+    setIsUploadingProperty(true);
+    
+    try {
+      const text = await file.text();
+      const rates = parseCSV(text);
+
+      if (rates.length === 0) {
+        throw new Error('No valid rate data found in CSV');
+      }
+
+      // Insert rates into database
+      const ratesToInsert = rates.map(rate => {
+        const checkInDate = new Date(rate.check_in_date);
+        const checkOutDate = new Date(checkInDate);
+        checkOutDate.setDate(checkOutDate.getDate() + 1);
+        
+        return {
+          ...rate,
+          check_out_date: checkOutDate.toISOString().split('T')[0],
+          property_id: selectedProperty.id,
+          currency: 'THB',
+        };
+      });
+
+      const { error } = await supabase.from('scraped_rates').insert(ratesToInsert);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Uploaded ${rates.length} rates for your property`,
+      });
+
+      // Reset file input
+      e.target.value = '';
+    } catch (error: any) {
+      console.error('CSV upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to parse CSV file",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingProperty(false);
     }
   };
 
@@ -251,84 +289,66 @@ const Competitors = () => {
         title: "Success",
         description: "Competitor deleted",
       });
-      fetchCompetitors(selectedPropertyId);
+      if (selectedProperty) {
+        fetchCompetitors(selectedProperty.id);
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
+      <PropertySelector />
       <main className="container mx-auto p-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Competitor Management</h1>
           <p className="text-muted-foreground">Add competitors and upload CSV pricing data</p>
         </div>
 
-        {properties.length === 0 ? (
+        {!selectedProperty ? (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Create Your First Property</CardTitle>
               <CardDescription>Start by adding a property to track competitors</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const name = formData.get('property-name') as string;
-                const booking_url = formData.get('property-url') as string;
-                
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) return;
-
-                const { error } = await supabase.from("properties").insert({
-                  user_id: session.user.id,
-                  name,
-                  booking_url: booking_url || null,
-                });
-
-                if (error) {
-                  toast({
-                    title: "Error",
-                    description: error.message,
-                    variant: "destructive",
-                  });
-                } else {
-                  toast({
-                    title: "Success",
-                    description: "Property created successfully",
-                  });
-                  fetchProperties();
-                  e.currentTarget.reset();
-                }
-              }} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="property-name">Property Name</Label>
-                  <Input
-                    id="property-name"
-                    name="property-name"
-                    placeholder="e.g., My Hotel Pattaya"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="property-url">Booking.com URL (Optional)</Label>
-                  <Input
-                    id="property-url"
-                    name="property-url"
-                    type="url"
-                    placeholder="https://www.booking.com/hotel/..."
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Property
-                </Button>
-              </form>
+              <p className="text-center text-muted-foreground py-8">
+                Create your first property to start managing competitors
+              </p>
             </CardContent>
           </Card>
         ) : (
           <>
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upload Property Data</CardTitle>
+                  <CardDescription>Upload CSV file with your property's pricing data</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="property-csv-upload">CSV File</Label>
+                    <Input
+                      id="property-csv-upload"
+                      type="file"
+                      accept=".csv"
+                      onChange={handlePropertyCSVUpload}
+                      disabled={isUploadingProperty}
+                      className="cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2, Currency
+                    </p>
+                  </div>
+
+                  {isUploadingProperty && (
+                    <div className="text-sm text-muted-foreground">
+                      Uploading and processing...
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Add Competitor</CardTitle>
@@ -336,21 +356,6 @@ const Competitors = () => {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleAddCompetitor} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="property">Property</Label>
-                      <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a property" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {properties.map((property) => (
-                            <SelectItem key={property.id} value={property.id}>
-                              {property.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="competitor-name">Competitor Name</Label>
@@ -410,16 +415,16 @@ const Competitors = () => {
                       id="csv-upload"
                       type="file"
                       accept=".csv"
-                      onChange={handleCSVUpload}
-                      disabled={!selectedCompetitorId || isUploading}
+                      onChange={handleCompetitorCSVUpload}
+                      disabled={!selectedCompetitorId || isUploadingCompetitor}
                       className="cursor-pointer"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2
+                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2, Currency
                     </p>
                   </div>
 
-                  {isUploading && (
+                  {isUploadingCompetitor && (
                     <div className="text-sm text-muted-foreground">
                       Uploading and processing...
                     </div>
@@ -433,33 +438,28 @@ const Competitors = () => {
                 <CardHeader>
                   <CardTitle>My Property</CardTitle>
                   <CardDescription>
-                    {selectedPropertyId && properties.find((p) => p.id === selectedPropertyId)?.name}
+                    {selectedProperty?.name}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {selectedPropertyId && (() => {
-                    const property = properties.find((p) => p.id === selectedPropertyId);
-                    return (
-                      <div className="rounded-lg border p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium">{property?.name}</p>
-                            {property?.booking_url && (
-                              <a
-                                href={property.booking_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
-                              >
-                                View on Booking.com
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium">{selectedProperty?.name}</p>
+                        {selectedProperty?.booking_url && (
+                          <a
+                            href={selectedProperty.booking_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
+                          >
+                            View on Booking.com
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
-                    );
-                  })()}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
