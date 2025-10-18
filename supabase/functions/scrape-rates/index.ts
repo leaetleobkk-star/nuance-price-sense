@@ -499,6 +499,7 @@ Deno.serve(async (req) => {
         continue;
       }
       console.log(`\nQueueing ${hotel.name}...`);
+      const hotelUrl = hotel.url; // Capture non-null URL for closure
 
       for (const checkInDate of dates) {
         for (const adults of [1, 2]) {
@@ -509,19 +510,19 @@ Deno.serve(async (req) => {
 
               // Priority 1: ScrapingBee (fastest and most reliable)
               if (scrapingBeeApiKey) {
-                result = await scrapeWithScrapingBee(hotel.url, checkInDate, scrapingBeeApiKey, adults);
+                result = await scrapeWithScrapingBee(hotelUrl, checkInDate, scrapingBeeApiKey, adults);
               }
 
               // Priority 2: Direct HTTP fallback
               if (result.price === null) {
                 console.log(`ScrapingBee failed, trying direct HTTP (adults=${adults})...`);
-                result = await scrapeDirectHTTP(hotel.url, checkInDate, adults);
+                result = await scrapeDirectHTTP(hotelUrl, checkInDate, adults);
               }
 
               // Priority 3: Firecrawl fallback
               if (result.price === null && firecrawlApiKey) {
                 console.log(`Direct failed, trying Firecrawl (adults=${adults})...`);
-                result = await scrapeWithFirecrawl(hotel.url, checkInDate, firecrawlApiKey, adults);
+                result = await scrapeWithFirecrawl(hotelUrl, checkInDate, firecrawlApiKey, adults);
               }
 
               completed++;
@@ -531,7 +532,7 @@ Deno.serve(async (req) => {
               if (result.price && result.price > 0) {
                 const checkOutDate = new Date(checkInDate);
                 checkOutDate.setDate(checkOutDate.getDate() + 1);
-                const currency = inferCurrency(hotel.url);
+                const currency = inferCurrency(hotelUrl);
 
                 const rateData: any = {
                   check_in_date: checkInDate,
