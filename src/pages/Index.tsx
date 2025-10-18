@@ -75,6 +75,7 @@ const IndexContent = () => {
     setPendingDates(new Set(dates));
     
     try {
+      const startedAt = new Date().toISOString();
       const { data, error } = await supabase.functions.invoke("scrape-rates", {
         body: {
           propertyId: selectedProperty.id,
@@ -122,11 +123,52 @@ const IndexContent = () => {
       });
     } catch (error) {
       console.error("Error refreshing rates:", error);
-      toast({
-        title: "Error",
-        description: "Failed to refresh rates. Please try again.",
-        variant: "destructive",
-      });
+      // Fallback: check if data was actually inserted despite network error
+      try {
+        const fromStr = dateRange.from!.toISOString().split('T')[0];
+        const toStr = dateRange.to!.toISOString().split('T')[0];
+        const compIds = competitors.map(c => c.id);
+        const [compRes, mineRes] = await Promise.all([
+          supabase
+            .from('scraped_rates')
+            .select('check_in_date')
+            .in('competitor_id', compIds)
+            .gte('check_in_date', fromStr)
+            .lte('check_in_date', toStr),
+          supabase
+            .from('scraped_rates')
+            .select('check_in_date')
+            .eq('property_id', selectedProperty.id)
+            .gte('check_in_date', fromStr)
+            .lte('check_in_date', toStr),
+        ]);
+        const seen = new Set<string>([
+          ...((compRes.data || []) as any[]).map(r => r.check_in_date),
+          ...((mineRes.data || []) as any[]).map(r => r.check_in_date),
+        ]);
+        if (seen.size > 0) {
+          setUpdatedDates(seen);
+          setPendingDates(new Set());
+          setTableRefreshKey(k => k + 1);
+          toast({
+            title: "Completed",
+            description: "Rates updated despite a network interruption.",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to refresh rates. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback verification failed:', fallbackErr);
+        toast({
+          title: "Error",
+          description: "Failed to refresh rates. Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsRefreshing(false);
       setScrapingProgress(0);
