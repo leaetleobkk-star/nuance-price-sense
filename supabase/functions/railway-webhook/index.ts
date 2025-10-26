@@ -48,8 +48,15 @@ Deno.serve(async (req) => {
         console.log(`   Stats:`, JSON.stringify(body.data.stats, null, 2))
       }
 
-      // If Railway sent scraped rates data, insert it
-      if (body.data?.rates && Array.isArray(body.data.rates)) {
+      console.log('Checking CSV conditions:', {
+        hasRates: !!body.data?.rates,
+        isArray: Array.isArray(body.data?.rates),
+        hasUserId: !!body.data?.user_id,
+        userId: body.data?.user_id
+      });
+
+      // If Railway sent scraped rates data, save as CSV and insert to database
+      if (body.data?.rates && Array.isArray(body.data.rates) && body.data.user_id) {
         const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
         const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
         
@@ -65,6 +72,52 @@ Deno.serve(async (req) => {
           auth: { persistSession: false },
         })
 
+        // Generate CSV content
+        const csvRows = ['Date,Room,Price,Adults,Currency'];
+        body.data.rates.forEach((rate: any) => {
+          csvRows.push(
+            `${rate.check_in_date},${rate.room_type || 'N/A'},${rate.price_amount},${rate.adults || 2},${rate.currency || 'THB'}`
+          );
+        });
+        const csvContent = csvRows.join('\n');
+
+        // Upload CSV to storage
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const entityType = body.data.property_id ? 'property' : 'competitor';
+        const entityId = body.data.property_id || body.data.competitor_id;
+        const fileName = `${entityType}_${entityId}_railway_${timestamp}.csv`;
+        const filePath = `${body.data.user_id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('rate-csvs')
+          .upload(filePath, csvContent, {
+            contentType: 'text/csv',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Failed to upload CSV:', uploadError);
+        } else {
+          console.log(`✅ Uploaded CSV: ${fileName}`);
+
+          // Track in csv_uploads table
+          const { data: csvRecord, error: csvError } = await supabase.from('csv_uploads').insert({
+            user_id: body.data.user_id,
+            property_id: body.data.property_id || null,
+            competitor_id: body.data.competitor_id || null,
+            file_name: fileName,
+            file_path: filePath,
+            record_count: body.data.rates.length,
+          }).select();
+
+          if (csvError) {
+            console.error('Failed to track CSV upload:', csvError);
+          } else {
+            console.log(`✅ CSV upload tracked:`, csvRecord);
+          }
+        }
+
+        // Insert rates into database
         const ratesToInsert = body.data.rates.map((rate: any) => ({
           property_id: body.data.property_id || null,
           competitor_id: body.data.competitor_id || null,
