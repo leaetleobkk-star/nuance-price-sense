@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp, Trash2 } from "lucide-react";
 import { useProperty } from "@/contexts/PropertyContext";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
-
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 interface RateDetail {
   price: number | string;
   roomType: string | null;
@@ -61,6 +62,7 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (selectedProperty && dateRange?.from && dateRange?.to) {
@@ -268,6 +270,33 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
     );
   }
 
+  const handleDeleteDate = async (isoDate: string) => {
+    if (!selectedProperty) return;
+    try {
+      await Promise.all([
+        supabase
+          .from('scraped_rates')
+          .delete()
+          .eq('property_id', selectedProperty.id)
+          .eq('adults', adults)
+          .eq('check_in_date', isoDate),
+        competitors.length
+          ? supabase
+              .from('scraped_rates')
+              .delete()
+              .in('competitor_id', competitors.map(c => c.id))
+              .eq('adults', adults)
+              .eq('check_in_date', isoDate)
+          : Promise.resolve(),
+      ]);
+      toast({ title: 'Deleted', description: `Removed rates for ${isoDate}` });
+      fetchPricingData();
+    } catch (e: any) {
+      console.error('Delete date error:', e);
+      toast({ title: 'Delete failed', description: e.message || 'Please try again', variant: 'destructive' });
+    }
+  };
+
   const renderPriceCell = (detail: RateDetail | undefined, isMyProperty: boolean = false, myPropertyPrice: number = 0) => {
     if (!detail || typeof detail.price === 'string') {
       return <span className="text-muted-foreground text-[10px]">{detail?.price || 'No data'}</span>;
@@ -343,7 +372,18 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
                 className="border-b transition-colors hover:bg-muted/30"
               >
                 <td className="sticky left-0 bg-background p-2">
-                  <span className="text-[10px] text-muted-foreground">{row.day}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">{row.day}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => handleDeleteDate(row.isoDate)}
+                      aria-label={`Delete rates for ${row.date}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
                 </td>
                 <td className="p-2 text-xs font-medium">
                   {row.date}

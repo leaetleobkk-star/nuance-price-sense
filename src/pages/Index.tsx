@@ -101,14 +101,28 @@ const IndexContent = () => {
 
     try {
       const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase
-        .from('scraped_rates')
-        .select('check_in_date')
-        .eq('property_id', selectedProperty.id)
-        .gte('scraped_at', since);
+      const compIds = competitors.map(c => c.id);
 
-      if (data && data.length > 0) {
-        const dates = data.map((r: any) => new Date(r.check_in_date));
+      const [propQ, compQ] = await Promise.all([
+        supabase
+          .from('scraped_rates')
+          .select('check_in_date')
+          .eq('property_id', selectedProperty.id)
+          .eq('adults', adults)
+          .gte('scraped_at', since),
+        compIds.length > 0
+          ? supabase
+              .from('scraped_rates')
+              .select('check_in_date')
+              .in('competitor_id', compIds)
+              .eq('adults', adults)
+              .gte('scraped_at', since)
+          : Promise.resolve({ data: [] as any[] } as any),
+      ]);
+
+      const rows = [...(propQ.data || []), ...((compQ as any).data || [])];
+      if (rows.length > 0) {
+        const dates = rows.map((r: any) => new Date(r.check_in_date));
         const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
         const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
         setDateRange({ from: minDate, to: maxDate });
