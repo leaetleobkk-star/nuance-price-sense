@@ -63,7 +63,7 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (selectedProperty && competitors.length > 0 && dateRange?.from && dateRange?.to) {
+    if (selectedProperty && dateRange?.from && dateRange?.to) {
       fetchPricingData();
     } else {
       setPricingData([]);
@@ -73,7 +73,7 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
 
   // Auto-refresh when new scraped rates are added
   useEffect(() => {
-    if (!selectedProperty || competitors.length === 0) return;
+    if (!selectedProperty) return;
 
     const channel = supabase
       .channel('scraped_rates_changes')
@@ -259,16 +259,6 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
     );
   }
 
-  if (competitors.length === 0) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-muted-foreground mb-2">No competitors configured for this property</p>
-        <p className="text-sm text-muted-foreground">
-          Add competitors in the Competitors page to see pricing comparisons
-        </p>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (

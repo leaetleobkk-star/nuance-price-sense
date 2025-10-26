@@ -55,8 +55,44 @@ Deno.serve(async (req) => {
         userId: body.data?.user_id
       });
 
+      // Resolve user_id if not provided by Railway (derive from property/competitor owner)
+      let resolvedUserId: string | undefined = body.data?.user_id;
+      if (!resolvedUserId) {
+        const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+        const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (SUPABASE_URL && SERVICE_ROLE_KEY) {
+          const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+          try {
+            if (body.data?.property_id) {
+              const { data: prop, error: propErr } = await admin
+                .from('properties')
+                .select('user_id')
+                .eq('id', body.data.property_id)
+                .single();
+              if (!propErr && prop) resolvedUserId = prop.user_id as string;
+            } else if (body.data?.competitor_id) {
+              const { data: comp, error: compErr } = await admin
+                .from('competitors')
+                .select('property_id')
+                .eq('id', body.data.competitor_id)
+                .single();
+              if (!compErr && comp?.property_id) {
+                const { data: prop2, error: propErr2 } = await admin
+                  .from('properties')
+                  .select('user_id')
+                  .eq('id', comp.property_id)
+                  .single();
+                if (!propErr2 && prop2) resolvedUserId = prop2.user_id as string;
+              }
+            }
+          } catch (e) {
+            console.error('Failed to resolve user_id for CSV:', e);
+          }
+        }
+      }
+
       // If Railway sent scraped rates data, save as CSV and insert to database
-      if (body.data?.rates && Array.isArray(body.data.rates) && body.data.user_id) {
+      if (body.data?.rates && Array.isArray(body.data.rates) && resolvedUserId) {
         const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
         const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
         
@@ -86,7 +122,7 @@ Deno.serve(async (req) => {
         const entityType = body.data.property_id ? 'property' : 'competitor';
         const entityId = body.data.property_id || body.data.competitor_id;
         const fileName = `${entityType}_${entityId}_railway_${timestamp}.csv`;
-        const filePath = `${body.data.user_id}/${fileName}`;
+        const filePath = `${resolvedUserId}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('rate-csvs')
@@ -102,7 +138,7 @@ Deno.serve(async (req) => {
 
           // Track in csv_uploads table
           const { data: csvRecord, error: csvError } = await supabase.from('csv_uploads').insert({
-            user_id: body.data.user_id,
+            user_id: resolvedUserId,
             property_id: body.data.property_id || null,
             competitor_id: body.data.competitor_id || null,
             file_name: fileName,
