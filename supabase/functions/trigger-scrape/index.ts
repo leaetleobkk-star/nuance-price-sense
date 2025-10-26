@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization')
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
@@ -38,14 +38,21 @@ Deno.serve(async (req) => {
     )
 
     // Verify user is authenticated
+    console.log('Auth header present:', !!authHeader)
     const token = authHeader.replace('Bearer ', '')
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(token)
+
+    let userResp = await supabaseClient.auth.getUser(token)
+    if (userResp.error || !userResp.data.user) {
+      // Fallback: try using global header-based session
+      userResp = await supabaseClient.auth.getUser()
+    }
+
+    const user = userResp.data.user
+    const authError = userResp.error
+    console.log('Auth check -> hasUser:', !!user, 'error:', authError?.message)
 
     if (authError || !user) {
-      console.error('Authentication error:', authError)
+      console.error('Authentication failed:', authError)
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
