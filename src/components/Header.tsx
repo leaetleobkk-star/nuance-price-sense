@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Settings, User, LogOut, Cloud } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+
 import { useToast } from "@/hooks/use-toast";
 
 export const Header = () => {
@@ -76,10 +76,17 @@ export const Header = () => {
         </div>
         
         <div className="flex items-center gap-3">
-          <Badge variant="secondary" className="gap-1.5 px-2.5 py-1">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1.5 px-2.5 py-1"
+            onClick={() => navigate("/settings")}
+            aria-label="Open Lovable Cloud settings"
+            title="Open Lovable Cloud settings"
+          >
             <Cloud className="h-3.5 w-3.5" />
             <span className="text-xs font-medium">Lovable Cloud</span>
-          </Badge>
+          </Button>
           <Button 
             variant="ghost" 
             size="icon"
