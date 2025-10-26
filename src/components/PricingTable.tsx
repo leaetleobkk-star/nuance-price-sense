@@ -71,6 +71,33 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
     }
   }, [selectedProperty, competitors, dateRange, adults, currency]);
 
+  // Auto-refresh when new scraped rates are added
+  useEffect(() => {
+    if (!selectedProperty || competitors.length === 0) return;
+
+    const channel = supabase
+      .channel('scraped_rates_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'scraped_rates',
+        },
+        () => {
+          // Refetch data when new rates are inserted
+          if (dateRange?.from && dateRange?.to) {
+            fetchPricingData();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedProperty, competitors, dateRange]);
+
   const fetchPricingData = async () => {
     if (!dateRange?.from || !dateRange?.to) return;
     

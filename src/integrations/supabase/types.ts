@@ -186,10 +186,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_old_csv_uploads: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      cleanup_old_csv_uploads: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
