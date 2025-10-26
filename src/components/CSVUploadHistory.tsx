@@ -31,6 +31,36 @@ export const CSVUploadHistory = ({ propertyId, competitorId, entityName }: CSVUp
     fetchUploads();
   }, [propertyId, competitorId]);
 
+  // Auto-refresh when new CSV uploads are added
+  useEffect(() => {
+    const channel = supabase
+      .channel('csv_uploads_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'csv_uploads',
+        },
+        (payload) => {
+          // Check if the new upload matches our filter
+          const newUpload = payload.new as CSVUpload;
+          if (
+            (propertyId && newUpload.property_id === propertyId) ||
+            (competitorId && newUpload.competitor_id === competitorId) ||
+            (!propertyId && !competitorId)
+          ) {
+            fetchUploads();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [propertyId, competitorId]);
+
   const fetchUploads = async () => {
     setIsLoading(true);
     try {
