@@ -191,6 +191,7 @@ const IndexContent = () => {
           dateRange={dateRange} 
           onDataLoaded={setPricingData}
           adults={adults}
+          currency={currency}
         />
         
         <div className="mt-6 rounded-lg border bg-card p-4 shadow-sm">

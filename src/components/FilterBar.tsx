@@ -81,6 +81,7 @@ export const FilterBar = ({
               <SelectItem value="THB">THB (฿)</SelectItem>
               <SelectItem value="USD">USD ($)</SelectItem>
               <SelectItem value="EUR">EUR (€)</SelectItem>
+              <SelectItem value="HKD">HKD (HK$)</SelectItem>
             </SelectContent>
           </Select>
         </div>

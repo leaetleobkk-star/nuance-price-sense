@@ -26,6 +26,7 @@ interface PricingTableProps {
   dateRange?: DateRange;
   onDataLoaded?: (data: any[]) => void;
   adults?: number;
+  currency?: string;
 }
 
 const getPriceClass = (price: number, myPrice: number) => {
@@ -41,7 +42,22 @@ const getDayName = (dateStr: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-export const PricingTable = ({ dateRange, onDataLoaded, adults = 2 }: PricingTableProps) => {
+const EXCHANGE_RATES: Record<string, { rate: number; symbol: string }> = {
+  THB: { rate: 1, symbol: '฿' },
+  USD: { rate: 0.028, symbol: '$' },
+  EUR: { rate: 0.026, symbol: '€' },
+  HKD: { rate: 0.22, symbol: 'HK$' },
+};
+
+const convertPrice = (price: number, currency: string = 'THB'): number => {
+  return price * EXCHANGE_RATES[currency].rate;
+};
+
+const getCurrencySymbol = (currency: string = 'THB'): string => {
+  return EXCHANGE_RATES[currency].symbol;
+};
+
+export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = 'THB' }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +69,7 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2 }: PricingTab
       setPricingData([]);
       setIsLoading(false);
     }
-  }, [selectedProperty, competitors, dateRange, adults]);
+  }, [selectedProperty, competitors, dateRange, adults, currency]);
 
   const fetchPricingData = async () => {
     if (!dateRange?.from || !dateRange?.to) return;
@@ -249,7 +265,7 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2 }: PricingTab
           "text-xs font-medium",
           isMyProperty ? "font-semibold text-orange-600 dark:text-orange-400" : getPriceClass(detail.price, myPropertyPrice)
         )}>
-          ฿ {detail.price.toLocaleString()}
+          {getCurrencySymbol(currency)} {convertPrice(detail.price, currency).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
         </span>
         {!isMyProperty && detail.price > myPropertyPrice && (
           <TrendingUp className="h-2.5 w-2.5 text-destructive" />
