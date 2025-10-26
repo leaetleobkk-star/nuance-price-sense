@@ -476,43 +476,43 @@ const Competitors = () => {
   };
 
   const handleScrapeAll = async () => {
+    if (!selectedProperty) return;
     setIsScrapingAll(true);
-    setShowProgress(true);
     try {
-      const response = await fetch(
-        'https://intelligent-renewal-production.up.railway.app/api/scrape-all',
-        { method: 'POST' }
-      );
-      
-      if (!response.ok) throw new Error('Scraping failed');
-      
-      const data = await response.json();
-      
-      // Initialize tasks with pending status
-      const initialTasks: ScrapeTask[] = data.tasks.map((task: any) => ({
-        ...task,
-        status: 'pending',
-        progress: 0,
-      }));
-      
-      setScrapeTasks(initialTasks);
-      
-      toast({
-        title: "Scraping Started",
-        description: `Scraping ${data.total} properties/competitors for the next 30 days. Track progress below.`,
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const end = new Date(today);
+      end.setDate(end.getDate() + 29); // next 30 days
+      const endDate = end.toISOString().split('T')[0];
+
+      const competitorsInput = competitors
+        .filter((c) => !!c.booking_url)
+        .map((c) => ({ id: c.id, name: c.name, url: c.booking_url as string }));
+
+      const { data, error } = await supabase.functions.invoke('scrape-rates', {
+        body: {
+          propertyId: selectedProperty.id,
+          propertyName: selectedProperty.name,
+          propertyUrl: selectedProperty.booking_url,
+          competitors: competitorsInput,
+          startDate,
+          endDate,
+        },
       });
 
-      // Start polling task statuses
-      pollTaskStatuses(initialTasks);
-      
-    } catch (error) {
+      if (error) throw error;
+
+      toast({
+        title: 'Scraping Started',
+        description: "Backend is scraping the next 30 days. Use 'Check Progress' to see new rates.",
+      });
+    } catch (error: any) {
       console.error('Error triggering scrape:', error);
       toast({
-        title: "Error",
-        description: 'Failed to start scraping. Please try again.',
-        variant: "destructive",
+        title: 'Error',
+        description: error?.message || 'Failed to start scraping. Please try again.',
+        variant: 'destructive',
       });
-      setShowProgress(false);
     } finally {
       setIsScrapingAll(false);
     }
@@ -526,7 +526,7 @@ const Competitors = () => {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Competitive Set Configuration</h1>
-            <p className="text-muted-foreground">Set up your properties and competitors - Railway will scrape the rates</p>
+            <p className="text-muted-foreground">Set up your properties and competitors - the backend will scrape the rates</p>
           </div>
           <div className="flex gap-2">
             {selectedProperty && (
@@ -605,7 +605,7 @@ const Competitors = () => {
                   <div className="flex-1">
                     <h3 className="font-semibold mb-1">Infrastructure-First Workflow</h3>
                     <p className="text-sm text-muted-foreground">
-                      Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger Railway to scrape all configured URLs and populate the pricing data for the <span className="font-medium">next 30 days</span>.
+                      Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger the backend to scrape all configured URLs and populate the pricing data for the <span className="font-medium">next 30 days</span>.
                     </p>
                   </div>
                 </div>
@@ -687,7 +687,7 @@ const Competitors = () => {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Create Your First Property</CardTitle>
-              <CardDescription>Set up your property structure that Railway will populate with rate data</CardDescription>
+              <CardDescription>Set up your property structure that the backend will populate with rate data</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-center text-muted-foreground py-8">
@@ -701,7 +701,7 @@ const Competitors = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Property Data (Optional)</CardTitle>
-                  <CardDescription>Manually upload CSV or let Railway scrape automatically</CardDescription>
+                  <CardDescription>Manually upload CSV or let the backend scrape automatically</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -768,7 +768,7 @@ const Competitors = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Competitor Data (Optional)</CardTitle>
-                  <CardDescription>Manually upload CSV or let Railway scrape automatically</CardDescription>
+                  <CardDescription>Manually upload CSV or let the backend scrape automatically</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
