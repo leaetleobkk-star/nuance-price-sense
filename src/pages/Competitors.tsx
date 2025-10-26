@@ -499,7 +499,7 @@ const Competitors = () => {
       
       toast({
         title: "Scraping Started",
-        description: `Scraping ${data.total} properties/competitors for the next 90 days. Track progress below.`,
+        description: `Scraping ${data.total} properties/competitors for the next 30 days. Track progress below.`,
       });
 
       // Start polling task statuses
@@ -605,7 +605,7 @@ const Competitors = () => {
                   <div className="flex-1">
                     <h3 className="font-semibold mb-1">Infrastructure-First Workflow</h3>
                     <p className="text-sm text-muted-foreground">
-                      Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger Railway to scrape all configured URLs and populate the pricing data for the <span className="font-medium">next 90 days</span>.
+                      Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger Railway to scrape all configured URLs and populate the pricing data for the <span className="font-medium">next 30 days</span>.
                     </p>
                   </div>
                 </div>
@@ -619,7 +619,7 @@ const Competitors = () => {
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        Scraping Progress (90 Days)
+                        Scraping Progress (30 Days)
                       </CardTitle>
                       <CardDescription>
                         Tracking {scrapeTasks.length} scraping task{scrapeTasks.length !== 1 ? 's' : ''}
@@ -663,7 +663,7 @@ const Competitors = () => {
                             </span>
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {task.status === 'completed' && 'Successfully scraped 90 days'}
+                            {task.status === 'completed' && 'Successfully scraped 30 days'}
                             {task.status === 'failed' && (task.message || 'Failed to scrape')}
                             {task.status === 'processing' && 'Scraping rates...'}
                             {task.status === 'pending' && 'Waiting to start...'}
