@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { PropertyProvider } from "@/contexts/PropertyContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Properties from "./pages/Properties";
 import Competitors from "./pages/Competitors";
 import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
@@ -22,6 +23,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/properties" element={<Properties />} />
             <Route path="/competitors" element={<Competitors />} />
             <Route path="/analytics" element={<Analytics />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
