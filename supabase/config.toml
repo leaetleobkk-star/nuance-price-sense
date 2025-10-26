@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.railway-webhook]
 verify_jwt = false
+
+[functions.generate-csv-backfill]
+verify_jwt = false

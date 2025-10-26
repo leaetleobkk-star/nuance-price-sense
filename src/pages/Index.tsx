@@ -96,12 +96,29 @@ const IndexContent = () => {
     };
   };
 
-  const handleRefresh = () => {
-    setTableRefreshKey(prev => prev + 1);
-    toast({
-      title: "Refreshing data",
-      description: "Loading latest rates...",
-    });
+  const handleRefresh = async () => {
+    if (!selectedProperty) return;
+
+    try {
+      const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from('scraped_rates')
+        .select('check_in_date')
+        .eq('property_id', selectedProperty.id)
+        .gte('scraped_at', since);
+
+      if (data && data.length > 0) {
+        const dates = data.map((r: any) => new Date(r.check_in_date));
+        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+        setDateRange({ from: minDate, to: maxDate });
+      }
+    } catch (e) {
+      console.error('Refresh error:', e);
+    } finally {
+      setTableRefreshKey(prev => prev + 1);
+      toast({ title: 'Refreshing data', description: 'Loading latest rates...' });
+    }
   };
 
   const recommendations = calculateRecommendations();

@@ -440,12 +440,25 @@ const Competitors = () => {
   };
 
   const handleRefresh = async () => {
-    if (selectedProperty) {
-      await fetchCompetitors(selectedProperty.id);
-      toast({
-        title: "Refreshed",
-        description: "Competitor data and CSV history updated",
+    if (!selectedProperty) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-csv-backfill', {
+        body: {
+          property_id: selectedProperty.id,
+          competitor_ids: competitors.map((c) => c.id),
+          hours_window: 6,
+        },
       });
+      if (error) throw error as any;
+
+      toast({
+        title: 'Refreshed',
+        description: 'Triggered CSV backfill and refreshed lists',
+      });
+    } catch (e: any) {
+      console.error('Backfill error:', e);
+      toast({ title: 'Refresh failed', description: e.message || 'Please try again', variant: 'destructive' });
     }
   };
 
