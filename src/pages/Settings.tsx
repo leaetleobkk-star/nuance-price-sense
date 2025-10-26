@@ -150,9 +150,22 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-muted p-4 rounded-lg font-mono text-sm space-y-2">
+              <div className="bg-muted p-4 rounded-lg font-mono text-sm space-y-3">
                 <div>SUPABASE_URL={supabaseUrl}</div>
                 <div>SUPABASE_SERVICE_ROLE_KEY=[Get from backend dashboard]</div>
+                <div className="pt-2 border-t" />
+                <div className="font-semibold">Webhook Endpoint</div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 break-all">{`https://${projectId}.functions.supabase.co/railway-webhook`}</code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(`https://${projectId}.functions.supabase.co/railway-webhook`, 'Webhook URL')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">Header: x-webhook-secret: [your secret value]</div>
               </div>
             </CardContent>
           </Card>
