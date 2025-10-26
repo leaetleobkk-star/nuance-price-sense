@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Settings, User, LogOut } from "lucide-react";
+import { Settings, User, LogOut, Cloud } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 export const Header = () => {
@@ -75,6 +76,10 @@ export const Header = () => {
         </div>
         
         <div className="flex items-center gap-3">
+          <Badge variant="secondary" className="gap-1.5 px-2.5 py-1">
+            <Cloud className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium">Lovable Cloud</span>
+          </Badge>
           <Button 
             variant="ghost" 
             size="icon"
