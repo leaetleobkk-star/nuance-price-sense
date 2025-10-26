@@ -96,6 +96,14 @@ const IndexContent = () => {
     };
   };
 
+  const handleRefresh = () => {
+    setTableRefreshKey(prev => prev + 1);
+    toast({
+      title: "Refreshing data",
+      description: "Loading latest rates...",
+    });
+  };
+
   const recommendations = calculateRecommendations();
 
   const handleExportCSV = () => {
@@ -163,6 +171,7 @@ const IndexContent = () => {
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onExport={handleExportCSV}
+        onRefresh={handleRefresh}
         adults={adults}
         onAdultsChange={setAdults}
         currency={currency}

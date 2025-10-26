@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 
 interface Property {
   id: string;
@@ -439,6 +439,16 @@ const Competitors = () => {
     }
   };
 
+  const handleRefresh = async () => {
+    if (selectedProperty) {
+      await fetchCompetitors(selectedProperty.id);
+      toast({
+        title: "Refreshed",
+        description: "Competitor data and CSV history updated",
+      });
+    }
+  };
+
   const checkTaskStatus = async (taskId: string) => {
     try {
       const response = await fetch(
@@ -529,6 +539,10 @@ const Competitors = () => {
             <p className="text-muted-foreground">Set up your properties and competitors - the backend will scrape the rates</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={handleRefresh}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
             <Dialog open={isAddPropertyDialogOpen} onOpenChange={setIsAddPropertyDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
