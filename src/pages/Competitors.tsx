@@ -529,26 +529,6 @@ const Competitors = () => {
             <p className="text-muted-foreground">Set up your properties and competitors - the backend will scrape the rates</p>
           </div>
           <div className="flex gap-2">
-            {selectedProperty && (
-              <>
-                <Button 
-                  onClick={checkRecentRates}
-                  disabled={isCheckingRates}
-                  variant="outline"
-                  size="lg"
-                >
-                  {isCheckingRates ? "Checking..." : "Check Progress"}
-                </Button>
-                <Button 
-                  onClick={handleScrapeAll}
-                  disabled={isScrapingAll}
-                  size="lg"
-                  className="bg-primary"
-                >
-                  {isScrapingAll ? "Scraping..." : "Update All Rates"}
-                </Button>
-              </>
-            )}
             <Dialog open={isAddPropertyDialogOpen} onOpenChange={setIsAddPropertyDialogOpen}>
               <DialogTrigger asChild>
                 <Button>

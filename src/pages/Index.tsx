@@ -10,8 +10,6 @@ import { PropertyProvider, useProperty } from "@/contexts/PropertyContext";
 import { useToast } from "@/hooks/use-toast";
 import { DateRange } from "react-day-picker";
 import { addDays } from "date-fns";
-import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
 
 interface RateDetail {
   price: number | string;
@@ -36,290 +34,9 @@ const IndexContent = () => {
     to: addDays(new Date(), 30),
   });
   const [adults, setAdults] = useState(2);
+  const [currency, setCurrency] = useState('THB');
   const [pricingData, setPricingData] = useState<PricingData[]>([]);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
-  const [isRefreshingFromCSV, setIsRefreshingFromCSV] = useState(false);
-
-  const parseCSV = (csvText: string) => {
-    const lines = csvText.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
-    
-    const dateIdx = headers.findIndex(h => h.toLowerCase() === 'date');
-    if (dateIdx === -1) {
-      throw new Error('CSV must have a "Date" column');
-    }
-
-    const roomA1Idx = headers.findIndex(h => h.includes('Room_A1'));
-    const priceA1Idx = headers.findIndex(h => h.includes('Price_A1'));
-    const roomA2Idx = headers.findIndex(h => h.includes('Room_A2'));
-    const priceA2Idx = headers.findIndex(h => h.includes('Price_A2'));
-
-    const rates: Array<{
-      check_in_date: string;
-      adults: number;
-      room_type: string | null;
-      price_amount: number;
-    }> = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue; // Skip empty lines
-      
-      const values = lines[i].split(',').map(v => v.trim());
-      const dateStr = values[dateIdx];
-      
-      if (!dateStr) continue;
-
-      let isoDate: string;
-      if (dateStr.includes('/')) {
-        const [month, day, year] = dateStr.split('/');
-        isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      } else {
-        isoDate = dateStr;
-      }
-
-      // Only add rate for A1 if both room and price exist and price is valid
-      if (roomA1Idx !== -1 && priceA1Idx !== -1) {
-        const room = values[roomA1Idx];
-        const priceStr = values[priceA1Idx];
-        const price = parseFloat(priceStr);
-        if (room && priceStr && !isNaN(price) && price > 0) {
-          rates.push({
-            check_in_date: isoDate,
-            adults: 1,
-            room_type: room,
-            price_amount: price,
-          });
-        }
-      }
-
-      // Only add rate for A2 if both room and price exist and price is valid
-      if (roomA2Idx !== -1 && priceA2Idx !== -1) {
-        const room = values[roomA2Idx];
-        const priceStr = values[priceA2Idx];
-        const price = parseFloat(priceStr);
-        if (room && priceStr && !isNaN(price) && price > 0) {
-          rates.push({
-            check_in_date: isoDate,
-            adults: 2,
-            room_type: room,
-            price_amount: price,
-          });
-        }
-      }
-    }
-
-    return rates;
-  };
-
-  const handleRefreshFromCSV = async () => {
-    if (!selectedProperty || competitors.length === 0) {
-      toast({
-        title: "Cannot refresh",
-        description: "Please select a property with competitors configured",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsRefreshingFromCSV(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      let totalProcessed = 0;
-      let filesProcessed = 0;
-      let errors: string[] = [];
-
-      // Get the latest CSV upload for the property
-      const { data: propertyUpload, error: propertyUploadError } = await supabase
-        .from('csv_uploads')
-        .select('file_path')
-        .eq('property_id', selectedProperty.id)
-        .order('uploaded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (propertyUploadError) {
-        console.error('Property upload fetch error:', propertyUploadError);
-        errors.push(`Property: ${propertyUploadError.message}`);
-      } else if (propertyUpload) {
-        const { data: propertyFile, error: propertyError } = await supabase.storage
-          .from('rate-csvs')
-          .download(propertyUpload.file_path);
-
-        if (propertyError) {
-          console.error('Property file download error:', propertyError);
-          errors.push(`Property file: ${propertyError.message}`);
-        } else if (propertyFile) {
-          try {
-            const text = await propertyFile.text();
-            const rates = parseCSV(text);
-            
-            console.log(`Parsed ${rates.length} rates for property from CSV`);
-            
-            // CRITICAL: Delete ALL existing rates for this property first
-            const { error: deleteError } = await supabase.from('scraped_rates')
-              .delete()
-              .eq('property_id', selectedProperty.id);
-
-            if (deleteError) {
-              console.error('Delete error:', deleteError);
-              throw deleteError;
-            }
-
-            console.log('Successfully deleted old property rates');
-
-            if (rates.length > 0) {
-              // Insert new rates
-              const ratesToInsert = rates.map(rate => {
-                const checkInDate = new Date(rate.check_in_date);
-                const checkOutDate = new Date(checkInDate);
-                checkOutDate.setDate(checkOutDate.getDate() + 1);
-                
-                return {
-                  ...rate,
-                  check_out_date: checkOutDate.toISOString().split('T')[0],
-                  property_id: selectedProperty.id,
-                  competitor_id: null,
-                  currency: 'THB',
-                };
-              });
-
-              const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
-              if (insertError) {
-                console.error('Insert error:', insertError);
-                throw insertError;
-              }
-
-              console.log(`Successfully inserted ${rates.length} new rates for property`);
-              totalProcessed += rates.length;
-              filesProcessed++;
-            } else {
-              console.log('No valid rates found in property CSV');
-            }
-          } catch (error: any) {
-            console.error('Property CSV processing error:', error);
-            errors.push(`Property CSV: ${error.message}`);
-          }
-        }
-      } else {
-        errors.push('No CSV uploaded for property');
-      }
-
-      // Process competitor CSVs
-      for (const competitor of competitors) {
-        const { data: competitorUpload, error: compUploadError } = await supabase
-          .from('csv_uploads')
-          .select('file_path')
-          .eq('competitor_id', competitor.id)
-          .order('uploaded_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (compUploadError) {
-          console.error(`Competitor ${competitor.name} upload fetch error:`, compUploadError);
-          errors.push(`${competitor.name}: ${compUploadError.message}`);
-          continue;
-        }
-
-        if (competitorUpload) {
-          const { data: compFile, error: compError } = await supabase.storage
-            .from('rate-csvs')
-            .download(competitorUpload.file_path);
-
-          if (compError) {
-            console.error(`Competitor ${competitor.name} file download error:`, compError);
-            errors.push(`${competitor.name} file: ${compError.message}`);
-            continue;
-          }
-
-          if (compFile) {
-            try {
-              const text = await compFile.text();
-              const rates = parseCSV(text);
-              
-              console.log(`Parsed ${rates.length} rates for competitor ${competitor.name}`);
-              
-              // CRITICAL: Delete ALL existing rates for this competitor first
-              const { error: deleteError } = await supabase.from('scraped_rates')
-                .delete()
-                .eq('competitor_id', competitor.id);
-
-              if (deleteError) {
-                console.error(`Delete error for ${competitor.name}:`, deleteError);
-                throw deleteError;
-              }
-
-              console.log(`Deleted old rates for competitor ${competitor.name}`);
-
-              if (rates.length > 0) {
-                // Insert new rates
-                const ratesToInsert = rates.map(rate => {
-                  const checkInDate = new Date(rate.check_in_date);
-                  const checkOutDate = new Date(checkInDate);
-                  checkOutDate.setDate(checkOutDate.getDate() + 1);
-                  
-                  return {
-                    ...rate,
-                    check_out_date: checkOutDate.toISOString().split('T')[0],
-                    competitor_id: competitor.id,
-                    property_id: null,
-                    currency: 'THB',
-                  };
-                });
-
-                const { error: insertError } = await supabase.from('scraped_rates').insert(ratesToInsert);
-                if (insertError) {
-                  console.error(`Insert error for ${competitor.name}:`, insertError);
-                  throw insertError;
-                }
-
-                console.log(`Inserted ${rates.length} new rates for competitor ${competitor.name}`);
-                totalProcessed += rates.length;
-                filesProcessed++;
-              }
-            } catch (error: any) {
-              console.error(`Competitor ${competitor.name} CSV processing error:`, error);
-              errors.push(`${competitor.name} CSV: ${error.message}`);
-            }
-          }
-        } else {
-          errors.push(`No CSV uploaded for ${competitor.name}`);
-        }
-      }
-
-      setTableRefreshKey(k => k + 1);
-
-      if (errors.length > 0) {
-        toast({
-          title: "Partial success",
-          description: `Refreshed ${totalProcessed} rates from ${filesProcessed} files. Errors: ${errors.join('; ')}`,
-          variant: "destructive",
-        });
-      } else if (totalProcessed === 0) {
-        toast({
-          title: "No data processed",
-          description: "Please upload CSV files first in the Competitors page",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: `Refreshed ${totalProcessed} rates from ${filesProcessed} CSV files`,
-        });
-      }
-    } catch (error: any) {
-      console.error('CSV refresh error:', error);
-      toast({
-        title: "Refresh failed",
-        description: error.message || "Failed to refresh from CSV files",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshingFromCSV(false);
-    }
-  };
   
   useEffect(() => {
     const checkAuth = async () => {
@@ -448,6 +165,8 @@ const IndexContent = () => {
         onExport={handleExportCSV}
         adults={adults}
         onAdultsChange={setAdults}
+        currency={currency}
+        onCurrencyChange={setCurrency}
       />
       
       <div className="px-6 py-4 border-b bg-card">
@@ -462,16 +181,6 @@ const IndexContent = () => {
               dateTo={dateRange?.to?.toISOString().split('T')[0] || addDays(new Date(), 30).toISOString().split('T')[0]}
               adults={adults}
             />
-            <Button 
-              onClick={handleRefreshFromCSV}
-              disabled={isRefreshingFromCSV}
-              size="sm"
-              variant="outline"
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshingFromCSV ? 'animate-spin' : ''}`} />
-              {isRefreshingFromCSV ? 'Refreshing...' : 'Refresh from CSV'}
-            </Button>
           </div>
         </div>
       </div>

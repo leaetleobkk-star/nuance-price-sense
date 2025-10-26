@@ -13,6 +13,8 @@ interface FilterBarProps {
   onExport?: () => void;
   adults?: number;
   onAdultsChange?: (adults: number) => void;
+  currency?: string;
+  onCurrencyChange?: (currency: string) => void;
 }
 
 export const FilterBar = ({ 
@@ -21,6 +23,8 @@ export const FilterBar = ({
   onExport = () => {},
   adults = 2,
   onAdultsChange = () => {},
+  currency = 'THB',
+  onCurrencyChange = () => {},
 }: FilterBarProps) => {
   return (
     <div className="border-b bg-card px-6 py-4">
@@ -64,6 +68,19 @@ export const FilterBar = ({
             <SelectContent>
               <SelectItem value="1">1 guest</SelectItem>
               <SelectItem value="2">2 guests</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <div className="h-6 w-px bg-border" />
+          
+          <Select value={currency} onValueChange={onCurrencyChange}>
+            <SelectTrigger className="h-9 w-[100px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="THB">THB (฿)</SelectItem>
+              <SelectItem value="USD">USD ($)</SelectItem>
+              <SelectItem value="EUR">EUR (€)</SelectItem>
             </SelectContent>
           </Select>
         </div>
