@@ -107,26 +107,36 @@ const Settings = () => {
               {/* Service Role Key Note */}
               <div className="space-y-2 pt-4 border-t">
                 <label className="text-sm font-medium text-destructive">Service Role Key</label>
-                <p className="text-sm text-muted-foreground mb-3">
-                  The service role key is a sensitive credential that bypasses Row Level Security. 
-                  For security reasons, it's not exposed in the frontend app.
-                </p>
-                <p className="text-sm text-muted-foreground mb-3">
-                  To get your service role key:
-                </p>
-                <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-2 ml-2">
-                  <li>Open your Lovable Cloud backend dashboard</li>
-                  <li>Navigate to Settings → API</li>
-                  <li>Find "Service Role Key" (starts with eyJ...)</li>
-                  <li>Copy the entire JWT token</li>
-                </ol>
-                <div className="pt-4">
-                  <Button
-                    onClick={() => window.open(`https://supabase.com/dashboard/project/${projectId}/settings/api`, '_blank')}
-                    variant="default"
-                  >
-                    Open Backend Dashboard
-                  </Button>
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-3">
+                  <p className="text-sm font-medium">⚠️ Sensitive Credential</p>
+                  <p className="text-sm text-muted-foreground">
+                    The service role key bypasses all Row Level Security and is never exposed in the frontend for security reasons.
+                  </p>
+                </div>
+                
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mt-4 space-y-3">
+                  <p className="text-sm font-medium">📋 How to Get Your Service Role Key:</p>
+                  <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-2 ml-2">
+                    <li>Click the "View Backend" button below (opens in Lovable)</li>
+                    <li>In the backend dashboard, click on <strong>Settings → API</strong></li>
+                    <li>Scroll to find <strong>"Service Role Key"</strong> (long JWT token starting with <code className="bg-muted px-1 py-0.5 rounded">eyJ...</code>)</li>
+                    <li>Click the copy icon to copy the entire token</li>
+                    <li>Use this key in Railway's <code className="bg-muted px-1 py-0.5 rounded">SUPABASE_SERVICE_ROLE_KEY</code> environment variable</li>
+                  </ol>
+                  
+                  <div className="pt-3 flex gap-2">
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Click below to access your Lovable Cloud backend:
+                      </p>
+                      <div className="bg-card p-3 rounded border">
+                        <p className="text-xs font-mono text-muted-foreground mb-2">Project: {projectId}</p>
+                        <p className="text-xs text-muted-foreground">
+                          The backend will open in a new tab where you can find your service role key in Settings → API
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
