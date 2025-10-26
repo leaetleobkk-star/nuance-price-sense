@@ -124,18 +124,18 @@ const Settings = () => {
                     <li>Use this key in Railway's <code className="bg-muted px-1 py-0.5 rounded">SUPABASE_SERVICE_ROLE_KEY</code> environment variable</li>
                   </ol>
                   
-                  <div className="pt-3 flex gap-2">
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Click below to access your Lovable Cloud backend:
-                      </p>
-                      <div className="bg-card p-3 rounded border">
-                        <p className="text-xs font-mono text-muted-foreground mb-2">Project: {projectId}</p>
-                        <p className="text-xs text-muted-foreground">
-                          The backend will open in a new tab where you can find your service role key in Settings → API
-                        </p>
-                      </div>
-                    </div>
+                  <div className="pt-4">
+                    <Button
+                      onClick={() => window.open(`https://supabase.com/dashboard/project/${projectId}/settings/api`, '_blank')}
+                      variant="default"
+                      size="lg"
+                      className="w-full"
+                    >
+                      🔑 View Backend & Get Service Role Key
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                      Opens your backend dashboard where you can copy the service role key
+                    </p>
                   </div>
                 </div>
               </div>
