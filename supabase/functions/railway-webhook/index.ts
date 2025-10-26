@@ -6,7 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.48.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
 Deno.serve(async (req) => {
@@ -25,7 +25,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    const providedSecret = req.headers.get('x-webhook-secret') || ''
+    const authHeader = req.headers.get('authorization') || ''
+    const providedSecret = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : ''
     if (providedSecret !== WEBHOOK_SECRET) {
       console.warn('Invalid webhook secret')
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
