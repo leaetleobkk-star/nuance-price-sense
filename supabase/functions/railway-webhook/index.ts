@@ -35,8 +35,30 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    console.log('Incoming webhook body:', JSON.stringify(body).slice(0, 2000))
+    console.log('📡 Railway webhook received:', JSON.stringify(body, null, 2))
 
+    // Handle Railway notification format
+    if (body.task_id && body.status) {
+      console.log(`✅ Task ${body.task_id} - Status: ${body.status}`)
+      console.log(`   Name: ${body.data?.name || 'Unknown'}`)
+      console.log(`   Type: ${body.data?.type || 'Unknown'}`)
+      
+      if (body.data?.stats) {
+        console.log(`   Stats:`, JSON.stringify(body.data.stats, null, 2))
+      }
+
+      return new Response(JSON.stringify({ 
+        received: true,
+        task_id: body.task_id,
+        status: body.status,
+        timestamp: body.timestamp 
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Handle legacy rate data format (if Railway sends data directly)
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
@@ -51,13 +73,10 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     })
 
-    // Normalize payload into an array of records to insert
     const records = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : [body])
-
     const toInsert = [] as any[]
 
     for (const r of records) {
-      // Basic validation and mapping
       const price = Number(r.price_amount ?? r.price ?? r.amount)
       const currency = String(r.currency ?? 'THB')
       const checkIn = r.check_in_date || r.checkIn || r.check_in
