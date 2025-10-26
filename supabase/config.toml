@@ -2,3 +2,6 @@ project_id = "ftbjmbfkfyebmzbsfpmz"
 
 [functions.analytics-api]
 verify_jwt = false
+
+[functions.railway-webhook]
+verify_jwt = false
