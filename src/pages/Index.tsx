@@ -100,7 +100,7 @@ const IndexContent = () => {
     if (!selectedProperty) return;
 
     try {
-      const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const compIds = competitors.map(c => c.id);
 
       const [propQ, compQ] = await Promise.all([
