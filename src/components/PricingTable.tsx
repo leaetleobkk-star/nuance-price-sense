@@ -235,14 +235,13 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2 }: PricingTab
     );
   }
 
-  const renderPriceCell = (detail: RateDetail, isMyProperty: boolean = false) => {
-    if (typeof detail.price === 'string') {
-      return <span className="text-muted-foreground text-[10px]">{detail.price}</span>;
+  const renderPriceCell = (detail: RateDetail | undefined, isMyProperty: boolean = false, myPropertyPrice: number = 0) => {
+    if (!detail || typeof detail.price === 'string') {
+      return <span className="text-muted-foreground text-[10px]">{detail?.price || 'No data'}</span>;
     }
 
     const hasHistoricalData = detail.previousPrice !== undefined;
     const hasSignificantChange = hasHistoricalData && detail.percentChange && Math.abs(detail.percentChange) >= 10;
-    const myPropertyPrice = typeof pricingData[0]?.myProperty.price === 'number' ? pricingData[0].myProperty.price : 0;
 
     const priceContent = (
       <div className="flex items-center gap-1.5">
@@ -317,13 +316,14 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2 }: PricingTab
                   {row.date}
                 </td>
                 <td className="bg-orange-50 dark:bg-orange-950/20 p-2">
-                  {renderPriceCell(row.myProperty, true)}
+                  {renderPriceCell(row.myProperty, true, typeof row.myProperty.price === 'number' ? row.myProperty.price : 0)}
                 </td>
                 {competitors.map((comp) => {
                   const detail = row.competitorPrices[comp.id];
+                  const myPrice = typeof row.myProperty.price === 'number' ? row.myProperty.price : 0;
                   return (
                     <td key={comp.id} className="p-2">
-                      {renderPriceCell(detail)}
+                      {renderPriceCell(detail, false, myPrice)}
                     </td>
                   );
                 })}
