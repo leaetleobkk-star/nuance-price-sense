@@ -38,10 +38,11 @@ Deno.serve(async (req) => {
     )
 
     // Verify user is authenticated
+    const token = authHeader.replace('Bearer ', '')
     const {
       data: { user },
       error: authError,
-    } = await supabaseClient.auth.getUser()
+    } = await supabaseClient.auth.getUser(token)
 
     if (authError || !user) {
       console.error('Authentication error:', authError)
