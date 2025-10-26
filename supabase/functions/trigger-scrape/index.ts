@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get Railway API URL from environment
-    const railwayApiUrl = Deno.env.get('RAILWAY_API_URL')
+    // Get and normalize Railway API URL from environment
+    let railwayApiUrl = (Deno.env.get('RAILWAY_API_URL') || '').trim()
     if (!railwayApiUrl) {
       console.error('RAILWAY_API_URL not configured')
       return new Response(
@@ -100,6 +100,27 @@ Deno.serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    if (!/^https?:\/\//i.test(railwayApiUrl)) {
+      railwayApiUrl = `https://${railwayApiUrl}`
+    }
+
+    let finalRailwayUrl: string
+    try {
+      const u = new URL(railwayApiUrl)
+      if (!u.pathname || u.pathname === '/') {
+        u.pathname = '/api/scrape-from-lovable'
+      }
+      finalRailwayUrl = u.toString()
+    } catch (e) {
+      console.error('Invalid RAILWAY_API_URL:', railwayApiUrl, e)
+      return new Response(
+        JSON.stringify({ error: `Invalid RAILWAY_API_URL: ${railwayApiUrl}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('Using Railway endpoint:', finalRailwayUrl)
 
     // Prepare data for Railway
     const scrapePayload = {
@@ -122,7 +143,7 @@ Deno.serve(async (req) => {
     console.log('Sending to Railway:', scrapePayload)
 
     // Call Railway API
-    const railwayResponse = await fetch(railwayApiUrl, {
+    const railwayResponse = await fetch(finalRailwayUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
