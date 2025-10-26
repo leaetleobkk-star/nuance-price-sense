@@ -48,11 +48,59 @@ Deno.serve(async (req) => {
         console.log(`   Stats:`, JSON.stringify(body.data.stats, null, 2))
       }
 
+      // If Railway sent scraped rates data, insert it
+      if (body.data?.rates && Array.isArray(body.data.rates)) {
+        const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
+        const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        
+        if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+          console.error('Missing Supabase configuration')
+          return new Response(JSON.stringify({ error: 'Server not configured' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+        const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+          auth: { persistSession: false },
+        })
+
+        const ratesToInsert = body.data.rates.map((rate: any) => ({
+          property_id: body.data.property_id || null,
+          competitor_id: body.data.competitor_id || null,
+          room_type: rate.room_type || null,
+          adults: Number(rate.adults || 2),
+          price_amount: Number(rate.price_amount),
+          currency: rate.currency || 'THB',
+          check_in_date: rate.check_in_date,
+          check_out_date: rate.check_out_date,
+        }))
+
+        const { data: insertedRates, error: insertError } = await supabase
+          .from('scraped_rates')
+          .insert(ratesToInsert)
+          .select('id')
+
+        if (insertError) {
+          console.error('Failed to insert rates:', insertError)
+          return new Response(JSON.stringify({ 
+            error: 'Failed to save rates',
+            details: insertError.message 
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+        console.log(`✅ Inserted ${insertedRates?.length || 0} rates into database`)
+      }
+
       return new Response(JSON.stringify({ 
         received: true,
         task_id: body.task_id,
         status: body.status,
-        timestamp: body.timestamp 
+        timestamp: body.timestamp,
+        rates_inserted: body.data?.rates?.length || 0
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
