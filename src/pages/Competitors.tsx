@@ -54,6 +54,8 @@ const Competitors = () => {
   const [isScrapingAll, setIsScrapingAll] = useState(false);
   const [scrapeTasks, setScrapeTasks] = useState<ScrapeTask[]>([]);
   const [showProgress, setShowProgress] = useState(false);
+  const [recentRatesCount, setRecentRatesCount] = useState<number | null>(null);
+  const [isCheckingRates, setIsCheckingRates] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -409,6 +411,34 @@ const Competitors = () => {
     }
   };
 
+  const checkRecentRates = async () => {
+    if (!selectedProperty) return;
+    
+    setIsCheckingRates(true);
+    try {
+      // Check rates added in the last 10 minutes
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      
+      const { count, error } = await supabase
+        .from('scraped_rates')
+        .select('*', { count: 'exact', head: true })
+        .or(`property_id.eq.${selectedProperty.id},competitor_id.in.(${competitors.map(c => c.id).join(',')})`)
+        .gte('created_at', tenMinutesAgo);
+      
+      if (!error) {
+        setRecentRatesCount(count || 0);
+        toast({
+          title: "Recent Activity",
+          description: `${count || 0} rates added in the last 10 minutes`,
+        });
+      }
+    } catch (error) {
+      console.error('Error checking rates:', error);
+    } finally {
+      setIsCheckingRates(false);
+    }
+  };
+
   const checkTaskStatus = async (taskId: string) => {
     try {
       const response = await fetch(
@@ -500,14 +530,24 @@ const Competitors = () => {
           </div>
           <div className="flex gap-2">
             {selectedProperty && (
-              <Button 
-                onClick={handleScrapeAll}
-                disabled={isScrapingAll}
-                size="lg"
-                className="bg-primary"
-              >
-                {isScrapingAll ? "Scraping..." : "Update All Rates"}
-              </Button>
+              <>
+                <Button 
+                  onClick={checkRecentRates}
+                  disabled={isCheckingRates}
+                  variant="outline"
+                  size="lg"
+                >
+                  {isCheckingRates ? "Checking..." : "Check Progress"}
+                </Button>
+                <Button 
+                  onClick={handleScrapeAll}
+                  disabled={isScrapingAll}
+                  size="lg"
+                  className="bg-primary"
+                >
+                  {isScrapingAll ? "Scraping..." : "Update All Rates"}
+                </Button>
+              </>
             )}
             <Dialog open={isAddPropertyDialogOpen} onOpenChange={setIsAddPropertyDialogOpen}>
               <DialogTrigger asChild>
