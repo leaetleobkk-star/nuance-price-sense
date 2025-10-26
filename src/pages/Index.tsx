@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { PropertySelector } from "@/components/PropertySelector";
 import { FilterBar } from "@/components/FilterBar";
 import { PricingTable } from "@/components/PricingTable";
+import { TriggerScrapeButton } from "@/components/TriggerScrapeButton";
 import { PropertyProvider, useProperty } from "@/contexts/PropertyContext";
 import { useToast } from "@/hooks/use-toast";
 import { DateRange } from "react-day-picker";
@@ -453,17 +454,25 @@ const IndexContent = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Rate Comparison</h2>
-            <p className="text-sm text-muted-foreground">Upload CSVs in Competitors page, then refresh to see rates</p>
+            <p className="text-sm text-muted-foreground">Trigger Railway scraper or upload CSVs in Competitors page</p>
           </div>
-          <Button 
-            onClick={handleRefreshFromCSV}
-            disabled={isRefreshingFromCSV}
-            size="default"
-            className="gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow-lg"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshingFromCSV ? 'animate-spin' : ''}`} />
-            {isRefreshingFromCSV ? 'Refreshing...' : 'Refresh Rates'}
-          </Button>
+          <div className="flex gap-2">
+            <TriggerScrapeButton
+              dateFrom={dateRange?.from?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0]}
+              dateTo={dateRange?.to?.toISOString().split('T')[0] || addDays(new Date(), 30).toISOString().split('T')[0]}
+              adults={adults}
+            />
+            <Button 
+              onClick={handleRefreshFromCSV}
+              disabled={isRefreshingFromCSV}
+              size="sm"
+              variant="outline"
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshingFromCSV ? 'animate-spin' : ''}`} />
+              {isRefreshingFromCSV ? 'Refreshing...' : 'Refresh from CSV'}
+            </Button>
+          </div>
         </div>
       </div>
       
