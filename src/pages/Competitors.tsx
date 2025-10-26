@@ -42,6 +42,7 @@ const Competitors = () => {
   const [isAddPropertyDialogOpen, setIsAddPropertyDialogOpen] = useState(false);
   const [newPropertyName, setNewPropertyName] = useState("");
   const [newPropertyUrl, setNewPropertyUrl] = useState("");
+  const [isScrapingAll, setIsScrapingAll] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -397,6 +398,33 @@ const Competitors = () => {
     }
   };
 
+  const handleScrapeAll = async () => {
+    setIsScrapingAll(true);
+    try {
+      const response = await fetch(
+        'https://intelligent-renewal-production.up.railway.app/api/scrape-all',
+        { method: 'POST' }
+      );
+      
+      if (!response.ok) throw new Error('Scraping failed');
+      
+      const data = await response.json();
+      toast({
+        title: "Success",
+        description: `Started scraping ${data.total} properties and competitors. Check back in a few minutes.`,
+      });
+    } catch (error) {
+      console.error('Error triggering scrape:', error);
+      toast({
+        title: "Error",
+        description: 'Failed to start scraping. Please try again.',
+        variant: "destructive",
+      });
+    } finally {
+      setIsScrapingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -404,65 +432,92 @@ const Competitors = () => {
       <main className="container mx-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Competitor Management</h1>
-            <p className="text-muted-foreground">Add competitors and upload CSV pricing data</p>
+            <h1 className="text-3xl font-bold">Competitive Set Configuration</h1>
+            <p className="text-muted-foreground">Set up your properties and competitors - Railway will scrape the rates</p>
           </div>
-          <Dialog open={isAddPropertyDialogOpen} onOpenChange={setIsAddPropertyDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Property
+          <div className="flex gap-2">
+            {selectedProperty && (
+              <Button 
+                onClick={handleScrapeAll}
+                disabled={isScrapingAll}
+                size="lg"
+                className="bg-primary"
+              >
+                {isScrapingAll ? "Scraping..." : "Update All Rates"}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleAddProperty}>
-                <DialogHeader>
-                  <DialogTitle>Add New Property</DialogTitle>
-                  <DialogDescription>
-                    Create a new property to track rates and competitors
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="property-name">Property Name</Label>
-                    <Input
-                      id="property-name"
-                      placeholder="e.g., My Hotel Bangkok"
-                      value={newPropertyName}
-                      onChange={(e) => setNewPropertyName(e.target.value)}
-                      required
-                    />
+            )}
+            <Dialog open={isAddPropertyDialogOpen} onOpenChange={setIsAddPropertyDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Property
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleAddProperty}>
+                  <DialogHeader>
+                    <DialogTitle>Add New Property</DialogTitle>
+                    <DialogDescription>
+                      Create a new property to track rates and competitors
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="property-name">Property Name</Label>
+                      <Input
+                        id="property-name"
+                        placeholder="e.g., My Hotel Bangkok"
+                        value={newPropertyName}
+                        onChange={(e) => setNewPropertyName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="property-url">Booking.com URL (Optional)</Label>
+                      <Input
+                        id="property-url"
+                        type="url"
+                        placeholder="https://www.booking.com/hotel/..."
+                        value={newPropertyUrl}
+                        onChange={(e) => setNewPropertyUrl(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="property-url">Booking.com URL (Optional)</Label>
-                    <Input
-                      id="property-url"
-                      type="url"
-                      placeholder="https://www.booking.com/hotel/..."
-                      value={newPropertyUrl}
-                      onChange={(e) => setNewPropertyUrl(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? "Creating..." : "Create Property"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? "Creating..." : "Create Property"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
+
+        {selectedProperty && (
+          <Card className="mb-6 bg-primary/5 border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-1">Infrastructure-First Workflow</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger Railway to scrape all configured URLs and populate the pricing data.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {!selectedProperty ? (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Create Your First Property</CardTitle>
-              <CardDescription>Start by adding a property to track competitors</CardDescription>
+              <CardDescription>Set up your property structure that Railway will populate with rate data</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-center text-muted-foreground py-8">
-                Create your first property to start managing competitors
+                Click "Add Property" above to create your first property
               </p>
             </CardContent>
           </Card>
@@ -471,8 +526,8 @@ const Competitors = () => {
             <div className="grid gap-6 md:grid-cols-3">
               <Card>
                 <CardHeader>
-                  <CardTitle>Upload Property Data</CardTitle>
-                  <CardDescription>Upload CSV file with your property's pricing data</CardDescription>
+                  <CardTitle>Upload Property Data (Optional)</CardTitle>
+                  <CardDescription>Manually upload CSV or let Railway scrape automatically</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -501,7 +556,7 @@ const Competitors = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Add Competitor</CardTitle>
-                  <CardDescription>Add a competitor to track their pricing</CardDescription>
+                  <CardDescription>Add competitors to your competitive set structure</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleAddCompetitor} className="space-y-4">
@@ -538,8 +593,8 @@ const Competitors = () => {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Upload Competitor Data</CardTitle>
-                  <CardDescription>Upload CSV file with pricing data</CardDescription>
+                  <CardTitle>Upload Competitor Data (Optional)</CardTitle>
+                  <CardDescription>Manually upload CSV or let Railway scrape automatically</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
