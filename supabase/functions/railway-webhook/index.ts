@@ -184,6 +184,78 @@ Deno.serve(async (req) => {
         console.log(`✅ Inserted ${insertedRates?.length || 0} rates into database`)
       }
 
+      // Fallback: if no explicit rates were provided but task completed, generate CSV from recent DB inserts
+      try {
+        if ((!body.data?.rates || !Array.isArray(body.data?.rates)) && resolvedUserId && (body.data?.property_id || body.data?.competitor_id)) {
+          const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+          const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+          if (SUPABASE_URL && SERVICE_ROLE_KEY) {
+            const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+            let q = supabase
+              .from('scraped_rates')
+              .select('check_in_date, room_type, price_amount, adults, currency, scraped_at')
+              .gte('scraped_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+              .order('check_in_date')
+              .order('scraped_at', { ascending: false });
+
+            if (body.data?.property_id) {
+              q = q.eq('property_id', body.data.property_id);
+            } else if (body.data?.competitor_id) {
+              q = q.eq('competitor_id', body.data.competitor_id);
+            }
+
+            const { data: recentRates, error: recentErr } = await q;
+            if (recentErr) {
+              console.error('Failed to fetch recent rates for CSV fallback:', recentErr);
+            } else if (recentRates && recentRates.length > 0) {
+              const csvRows = ['Date,Room,Price,Adults,Currency'];
+              recentRates.forEach((rate: any) => {
+                csvRows.push(
+                  `${rate.check_in_date},${rate.room_type || 'N/A'},${rate.price_amount},${rate.adults || 2},${rate.currency || 'THB'}`
+                );
+              });
+              const csvContent = csvRows.join('\n');
+
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+              const entityType = body.data.property_id ? 'property' : 'competitor';
+              const entityId = body.data.property_id || body.data.competitor_id;
+              const fileName = `${entityType}_${entityId}_railway_${timestamp}.csv`;
+              const filePath = `${resolvedUserId}/${fileName}`;
+
+              const { error: uploadError2 } = await supabase.storage
+                .from('rate-csvs')
+                .upload(filePath, csvContent, {
+                  contentType: 'text/csv',
+                  upsert: false,
+                });
+
+              if (uploadError2) {
+                console.error('Failed to upload fallback CSV:', uploadError2);
+              } else {
+                const { error: csvError2 } = await supabase.from('csv_uploads').insert({
+                  user_id: resolvedUserId,
+                  property_id: body.data.property_id || null,
+                  competitor_id: body.data.competitor_id || null,
+                  file_name: fileName,
+                  file_path: filePath,
+                  record_count: recentRates.length,
+                });
+                if (csvError2) {
+                  console.error('Failed to track fallback CSV upload:', csvError2);
+                } else {
+                  console.log(`✅ Fallback CSV generated and tracked: ${fileName}`);
+                }
+              }
+            } else {
+              console.log('No recent rates found for CSV fallback.');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('CSV fallback generation failed:', e);
+      }
+
       return new Response(JSON.stringify({ 
         received: true,
         task_id: body.task_id,
