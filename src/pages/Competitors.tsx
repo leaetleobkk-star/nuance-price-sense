@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 interface Property {
   id: string;
@@ -26,6 +26,15 @@ interface Competitor {
   property_id: string;
   name: string;
   booking_url: string | null;
+}
+
+interface ScrapeTask {
+  task_id: string;
+  type: 'property' | 'competitor';
+  name: string;
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+  message?: string;
 }
 
 const Competitors = () => {
@@ -43,6 +52,8 @@ const Competitors = () => {
   const [newPropertyName, setNewPropertyName] = useState("");
   const [newPropertyUrl, setNewPropertyUrl] = useState("");
   const [isScrapingAll, setIsScrapingAll] = useState(false);
+  const [scrapeTasks, setScrapeTasks] = useState<ScrapeTask[]>([]);
+  const [showProgress, setShowProgress] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -398,8 +409,45 @@ const Competitors = () => {
     }
   };
 
+  const checkTaskStatus = async (taskId: string) => {
+    try {
+      const response = await fetch(
+        `https://intelligent-renewal-production.up.railway.app/api/status/${taskId}`
+      );
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Error checking task status:', error);
+    }
+    return null;
+  };
+
+  const pollTaskStatuses = async (tasks: ScrapeTask[]) => {
+    const updatedTasks = await Promise.all(
+      tasks.map(async (task) => {
+        const status = await checkTaskStatus(task.task_id);
+        if (status) {
+          return { ...task, ...status };
+        }
+        return task;
+      })
+    );
+    setScrapeTasks(updatedTasks);
+
+    // Continue polling if any task is still pending or processing
+    const hasActiveTasks = updatedTasks.some(
+      (t) => t.status === 'pending' || t.status === 'processing'
+    );
+    
+    if (hasActiveTasks) {
+      setTimeout(() => pollTaskStatuses(updatedTasks), 3000); // Poll every 3 seconds
+    }
+  };
+
   const handleScrapeAll = async () => {
     setIsScrapingAll(true);
+    setShowProgress(true);
     try {
       const response = await fetch(
         'https://intelligent-renewal-production.up.railway.app/api/scrape-all',
@@ -409,10 +457,24 @@ const Competitors = () => {
       if (!response.ok) throw new Error('Scraping failed');
       
       const data = await response.json();
+      
+      // Initialize tasks with pending status
+      const initialTasks: ScrapeTask[] = data.tasks.map((task: any) => ({
+        ...task,
+        status: 'pending',
+        progress: 0,
+      }));
+      
+      setScrapeTasks(initialTasks);
+      
       toast({
-        title: "Success",
-        description: `Started scraping ${data.total} properties and competitors. Check back in a few minutes.`,
+        title: "Scraping Started",
+        description: `Scraping ${data.total} properties/competitors for the next 90 days. Track progress below.`,
       });
+
+      // Start polling task statuses
+      pollTaskStatuses(initialTasks);
+      
     } catch (error) {
       console.error('Error triggering scrape:', error);
       toast({
@@ -420,6 +482,7 @@ const Competitors = () => {
         description: 'Failed to start scraping. Please try again.',
         variant: "destructive",
       });
+      setShowProgress(false);
     } finally {
       setIsScrapingAll(false);
     }
@@ -495,18 +558,89 @@ const Competitors = () => {
         </div>
 
         {selectedProperty && (
-          <Card className="mb-6 bg-primary/5 border-primary/20">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Infrastructure-First Workflow</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger Railway to scrape all configured URLs and populate the pricing data.
-                  </p>
+          <>
+            <Card className="mb-6 bg-primary/5 border-primary/20">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold mb-1">Infrastructure-First Workflow</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Configure your property and competitive set below. Once set up, click <span className="font-medium">"Update All Rates"</span> to trigger Railway to scrape all configured URLs and populate the pricing data for the <span className="font-medium">next 90 days</span>.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {showProgress && scrapeTasks.length > 0 && (
+              <Card className="mb-6 border-primary/30">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Scraping Progress (90 Days)
+                      </CardTitle>
+                      <CardDescription>
+                        Tracking {scrapeTasks.length} scraping task{scrapeTasks.length !== 1 ? 's' : ''}
+                      </CardDescription>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setShowProgress(false)}
+                    >
+                      Hide
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {scrapeTasks.map((task) => (
+                      <div
+                        key={task.task_id}
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                      >
+                        <div className="flex-shrink-0">
+                          {task.status === 'completed' && (
+                            <CheckCircle2 className="h-5 w-5 text-green-500" />
+                          )}
+                          {task.status === 'failed' && (
+                            <XCircle className="h-5 w-5 text-destructive" />
+                          )}
+                          {task.status === 'processing' && (
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                          )}
+                          {task.status === 'pending' && (
+                            <Clock className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">
+                            {task.name}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({task.type})
+                            </span>
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {task.status === 'completed' && 'Successfully scraped 90 days'}
+                            {task.status === 'failed' && (task.message || 'Failed to scrape')}
+                            {task.status === 'processing' && 'Scraping rates...'}
+                            {task.status === 'pending' && 'Waiting to start...'}
+                          </p>
+                        </div>
+                        {task.progress !== undefined && task.status === 'processing' && (
+                          <div className="text-right">
+                            <p className="text-sm font-medium">{Math.round(task.progress)}%</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
         {!selectedProperty ? (
