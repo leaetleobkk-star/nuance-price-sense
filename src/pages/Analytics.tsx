@@ -13,6 +13,7 @@ import { RevenuePerformanceChart } from "@/components/analytics/RevenuePerforman
 import { SnapshotMetrics } from "@/components/analytics/SnapshotMetrics";
 import { PickupAnalysis } from "@/components/analytics/PickupAnalysis";
 import { OccupancyChart } from "@/components/analytics/OccupancyChart";
+import { PriceOptimization } from "@/components/analytics/PriceOptimization";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -85,6 +86,7 @@ export default function Analytics() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="snapshot">Snapshot</TabsTrigger>
             <TabsTrigger value="pickup">Pickup Analysis</TabsTrigger>
+            <TabsTrigger value="optimization">Optimization</TabsTrigger>
             <TabsTrigger value="forecast">Forecast</TabsTrigger>
           </TabsList>
 
@@ -100,6 +102,10 @@ export default function Analytics() {
 
           <TabsContent value="pickup" className="space-y-6">
             <PickupAnalysis />
+          </TabsContent>
+
+          <TabsContent value="optimization" className="space-y-6">
+            <PriceOptimization />
           </TabsContent>
 
           <TabsContent value="forecast" className="space-y-6">
