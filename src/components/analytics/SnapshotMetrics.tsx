@@ -2,6 +2,9 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart } from 'recharts';
+import { useQuery } from "@tanstack/react-query";
+import { biSupabase } from "@/integrations/bi-supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const mockOccupancyData = Array.from({ length: 31 }, (_, i) => ({
   date: `Oct ${String(i + 1).padStart(2, '0')}`,
@@ -74,12 +77,52 @@ const GaugeCard = ({ title, value, subtitle, forecast, budget, sply, lya }: any)
 };
 
 export const SnapshotMetrics = () => {
+  const { data: metrics, isLoading } = useQuery({
+    queryKey: ['bi-snapshot-metrics'],
+    queryFn: async () => {
+      const currentDate = new Date();
+      const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      const { data, error } = await biSupabase
+        .from('lh_room_types')
+        .select('revenue, occupancy, adr, revpar, room_type')
+        .eq('property_id', 'property_1')
+        .eq('period', period);
+
+      if (error) throw error;
+      if (!data || data.length === 0) return null;
+
+      const totals = data.reduce((acc, row) => ({
+        revenue: acc.revenue + (row.revenue || 0),
+        occupancy: acc.occupancy + (row.occupancy || 0),
+        adr: acc.adr + (row.adr || 0),
+        revpar: acc.revpar + (row.revpar || 0),
+        count: acc.count + 1,
+      }), { revenue: 0, occupancy: 0, adr: 0, revpar: 0, count: 0 });
+
+      return {
+        occupancy: (totals.occupancy / totals.count).toFixed(1),
+        adr: (totals.adr / totals.count).toFixed(1),
+        revpar: (totals.revpar / totals.count).toFixed(1),
+        revenue: totals.revenue.toFixed(0),
+      };
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-[300px] w-full" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Snapshot</h2>
-          <p className="text-sm text-muted-foreground">Campus Perth • Oct 2025</p>
+          <p className="text-sm text-muted-foreground">Atlas Backpacker Hostel • {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -114,39 +157,39 @@ export const SnapshotMetrics = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <GaugeCard
             title="Occupancy"
-            value="98.0%"
-            subtitle="1,740,853"
-            forecast={97.2}
-            budget={95.8}
-            sply={77.0}
-            lya={77.3}
+            value={`${metrics?.occupancy || 0}%`}
+            subtitle="Occupancy Rate"
+            forecast={parseFloat(metrics?.occupancy || '0') * 1.02}
+            budget={parseFloat(metrics?.occupancy || '0') * 1.05}
+            sply={parseFloat(metrics?.occupancy || '0') * 0.95}
+            lya={parseFloat(metrics?.occupancy || '0') * 0.93}
           />
           <GaugeCard
             title="ADR"
-            value="62.6"
-            subtitle="NZ$"
-            forecast={63.1}
-            budget={59.0}
-            sply={50.4}
-            lya={50.7}
+            value={`$${metrics?.adr || 0}`}
+            subtitle="Average Daily Rate"
+            forecast={parseFloat(metrics?.adr || '0') * 1.02}
+            budget={parseFloat(metrics?.adr || '0') * 1.05}
+            sply={parseFloat(metrics?.adr || '0') * 0.92}
+            lya={parseFloat(metrics?.adr || '0') * 0.90}
           />
           <GaugeCard
             title="RevPAR"
-            value="61.3"
-            subtitle="NZ$"
-            forecast={61.4}
-            budget={56.5}
-            sply={38.8}
-            lya={39.2}
+            value={`$${metrics?.revpar || 0}`}
+            subtitle="Revenue per Available Room"
+            forecast={parseFloat(metrics?.revpar || '0') * 1.02}
+            budget={parseFloat(metrics?.revpar || '0') * 1.05}
+            sply={parseFloat(metrics?.revpar || '0') * 0.88}
+            lya={parseFloat(metrics?.revpar || '0') * 0.85}
           />
           <GaugeCard
             title="Revenue"
-            value="1,740,853"
-            subtitle="NZ$"
-            forecast={1742411}
-            budget={1605376}
-            sply={1102851}
-            lya={1113474}
+            value={`$${parseInt(metrics?.revenue || '0').toLocaleString()}`}
+            subtitle="Total Revenue"
+            forecast={parseInt(metrics?.revenue || '0') * 1.02}
+            budget={parseInt(metrics?.revenue || '0') * 1.05}
+            sply={parseInt(metrics?.revenue || '0') * 0.88}
+            lya={parseInt(metrics?.revenue || '0') * 0.85}
           />
         </div>
       </Card>

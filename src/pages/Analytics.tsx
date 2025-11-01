@@ -14,6 +14,8 @@ import { SnapshotMetrics } from "@/components/analytics/SnapshotMetrics";
 import { PickupAnalysis } from "@/components/analytics/PickupAnalysis";
 import { OccupancyChart } from "@/components/analytics/OccupancyChart";
 import { PriceOptimization } from "@/components/analytics/PriceOptimization";
+import { RoomTypeTable } from "@/components/analytics/RoomTypeTable";
+import { ChannelMixChart } from "@/components/analytics/ChannelMixChart";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -92,8 +94,12 @@ export default function Analytics() {
 
           <TabsContent value="overview" className="space-y-6">
             <KPICards />
-            <RevenuePerformanceChart />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RevenuePerformanceChart />
+              <ChannelMixChart />
+            </div>
             <OccupancyChart />
+            <RoomTypeTable />
           </TabsContent>
 
           <TabsContent value="snapshot" className="space-y-6">
