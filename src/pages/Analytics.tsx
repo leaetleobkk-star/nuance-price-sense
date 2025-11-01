@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,25 +45,22 @@ export default function Analytics() {
   });
 
   const { data: properties } = useQuery({
-    queryKey: ['bi-properties'],
+    queryKey: ['lovable-properties'],
     queryFn: async () => {
-      const { data, error } = await biSupabase
-        .from('lh_room_types')
-        .select('property_id')
-        .order('property_id');
-      
+      const { data, error } = await supabase
+        .from('properties')
+        .select('id, name, pms_type')
+        .order('name');
       if (error) throw error;
-      
-      const uniqueProperties = Array.from(new Set(data.map(d => d.property_id)));
-      
-      // Set first property as default
-      if (!selectedProperty && uniqueProperties.length > 0) {
-        setSelectedProperty(uniqueProperties[0]);
-      }
-      
-      return uniqueProperties;
+      return data || [];
     },
   });
+
+  useEffect(() => {
+    if (!selectedProperty && properties && properties.length > 0) {
+      setSelectedProperty(properties[0].id);
+    }
+  }, [properties, selectedProperty]);
 
   // Fetch all dashboard data in one call
   const { data: dashboardData, isLoading } = useCompleteAnalytics(selectedProperty, selectedPeriod);
@@ -112,13 +109,13 @@ export default function Analytics() {
               </Popover>
               
               <Select value={selectedProperty || ""} onValueChange={setSelectedProperty}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[220px]">
                   <SelectValue placeholder="Select property" />
                 </SelectTrigger>
                 <SelectContent className="z-50 bg-background">
-                  {properties?.map((propId) => (
-                    <SelectItem key={propId} value={propId}>
-                      {propId}
+                  {properties?.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -130,9 +127,9 @@ export default function Analytics() {
 
       {/* Main Content */}
       <div className="p-6">
-        {lovableProperties && lovableProperties.length > 0 && lovableProperties[0].pms_type === 'little-hotelier' && (
+        {selectedProperty && (
           <div className="mb-6">
-            <RefreshLHData propertyId={lovableProperties[0].id} />
+            <RefreshLHData propertyId={selectedProperty} />
           </div>
         )}
         
