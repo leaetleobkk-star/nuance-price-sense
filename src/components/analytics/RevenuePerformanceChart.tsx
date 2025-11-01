@@ -16,7 +16,21 @@ interface RevenuePerformanceChartProps {
 }
 
 export const RevenuePerformanceChart = ({ data }: RevenuePerformanceChartProps) => {
-  if (!data) return null;
+  if (!data || !data.trend_data || data.trend_data.length === 0) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">Revenue</h3>
+            <p className="text-sm text-muted-foreground">Performance by Property</p>
+          </div>
+          <p className="text-center text-muted-foreground py-8">
+            No revenue data available. Please refresh data from Little Hotelier.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const chartData = data.trend_data.map(item => ({
     month: new Date(item.period + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),

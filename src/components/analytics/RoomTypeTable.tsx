@@ -16,7 +16,18 @@ interface RoomTypeTableProps {
 }
 
 export const RoomTypeTable = ({ data }: RoomTypeTableProps) => {
-  if (!data) return null;
+  if (!data || !data.room_types || data.room_types.length === 0) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Room Type Performance</h3>
+          <p className="text-center text-muted-foreground py-8">
+            No room type data available. Please refresh data from Little Hotelier.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const getOccupancyColor = (occupancy: number) => {
     if (occupancy >= 80) return "text-green-600 dark:text-green-400";
@@ -43,7 +54,7 @@ export const RoomTypeTable = ({ data }: RoomTypeTableProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.room_types.map((room, index) => (
+              {data.room_types?.map((room, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium">{room.room_type || 'Unknown'}</TableCell>
                   <TableCell className="text-right">${room.revenue?.toLocaleString() || 0}</TableCell>

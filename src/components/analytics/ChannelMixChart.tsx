@@ -20,7 +20,21 @@ interface ChannelMixChartProps {
 }
 
 export const ChannelMixChart = ({ data }: ChannelMixChartProps) => {
-  if (!data) return null;
+  if (!data || !data.channels || data.channels.length === 0) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">Channel Mix</h3>
+            <p className="text-sm text-muted-foreground">Revenue distribution by channel</p>
+          </div>
+          <p className="text-center text-muted-foreground py-8">
+            No channel data available. Please refresh data from Little Hotelier.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const chartData = data.channels.map(item => ({
     name: item.channel || 'Unknown',

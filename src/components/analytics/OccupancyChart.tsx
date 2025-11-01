@@ -14,7 +14,21 @@ interface OccupancyChartProps {
 }
 
 export const OccupancyChart = ({ data }: OccupancyChartProps) => {
-  if (!data) return null;
+  if (!data || !data.trend_data || data.trend_data.length === 0) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">Weekly Occupancy & Rate Trends</h3>
+            <p className="text-sm text-muted-foreground">7-day rolling average</p>
+          </div>
+          <p className="text-center text-muted-foreground py-8">
+            No occupancy data available. Please refresh data from Little Hotelier.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const chartData = data.trend_data.map(item => ({
     date: new Date(item.period + '-01').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

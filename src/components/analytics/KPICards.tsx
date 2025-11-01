@@ -80,7 +80,18 @@ interface KPICardsProps {
 }
 
 export const KPICards = ({ data }: KPICardsProps) => {
-  if (!data) return null;
+  if (!data || !data.kpis) {
+    return (
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Portfolio Summary</h2>
+        <Card className="p-6">
+          <p className="text-center text-muted-foreground">
+            No KPI data available. Please refresh data from Little Hotelier.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   const { kpis } = data;
 
