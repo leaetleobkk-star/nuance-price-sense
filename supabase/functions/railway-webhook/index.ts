@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Insert rates into database
+        // Prepare rates to insert
         const ratesToInsert = body.data.rates.map((rate: any) => ({
           property_id: body.data.property_id || null,
           competitor_id: body.data.competitor_id || null,
@@ -165,6 +165,30 @@ Deno.serve(async (req) => {
           check_out_date: rate.check_out_date,
         }))
 
+        // DEDUPLICATION: Delete existing rates for this entity and date range
+        const entityField = body.data.property_id ? 'property_id' : 'competitor_id';
+        
+        // Get date range from the rates being inserted
+        const dates = body.data.rates.map((r: any) => r.check_in_date).sort();
+        const minDate = dates[0];
+        const maxDate = dates[dates.length - 1];
+
+        console.log(`🧹 Cleaning old rates for ${entityField}=${entityId}, dates ${minDate} to ${maxDate}`);
+
+        const { error: deleteError } = await supabase
+          .from('scraped_rates')
+          .delete()
+          .eq(entityField, entityId)
+          .gte('check_in_date', minDate)
+          .lte('check_in_date', maxDate);
+
+        if (deleteError) {
+          console.warn('Failed to delete old rates (continuing anyway):', deleteError);
+        } else {
+          console.log('✅ Old rates cleaned');
+        }
+
+        // Insert new rates
         const { data: insertedRates, error: insertError } = await supabase
           .from('scraped_rates')
           .insert(ratesToInsert)
