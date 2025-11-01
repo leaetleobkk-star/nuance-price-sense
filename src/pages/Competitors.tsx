@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, Clock, RefreshCw, Upload } from "lucide-react";
 
 interface Property {
   id: string;
@@ -267,6 +267,16 @@ const Competitors = () => {
         .delete()
         .eq('competitor_id', selectedCompetitorId);
 
+      // Check existing rates to determine currency
+      const { data: existingRates } = await supabase
+        .from('scraped_rates')
+        .select('currency')
+        .eq('competitor_id', selectedCompetitorId)
+        .limit(1)
+        .single();
+      
+      const detectedCurrency = existingRates?.currency || 'THB';
+
       // Insert rates into database
       const ratesToInsert = rates.map(rate => {
         const checkInDate = new Date(rate.check_in_date);
@@ -277,7 +287,7 @@ const Competitors = () => {
           ...rate,
           check_out_date: checkOutDate.toISOString().split('T')[0],
           competitor_id: selectedCompetitorId,
-          currency: 'THB',
+          currency: detectedCurrency,
         };
       });
 
@@ -345,6 +355,16 @@ const Competitors = () => {
         .delete()
         .eq('property_id', selectedProperty.id);
 
+      // Check existing rates to determine currency
+      const { data: existingRates } = await supabase
+        .from('scraped_rates')
+        .select('currency')
+        .eq('property_id', selectedProperty.id)
+        .limit(1)
+        .single();
+      
+      const detectedCurrency = existingRates?.currency || 'THB';
+
       // Insert rates into database
       const ratesToInsert = rates.map(rate => {
         const checkInDate = new Date(rate.check_in_date);
@@ -355,7 +375,7 @@ const Competitors = () => {
           ...rate,
           check_out_date: checkOutDate.toISOString().split('T')[0],
           property_id: selectedProperty.id,
-          currency: 'THB',
+          currency: detectedCurrency,
         };
       });
 
@@ -707,7 +727,10 @@ const Competitors = () => {
             <div className="grid gap-6 md:grid-cols-3">
               <Card>
                 <CardHeader>
-                  <CardTitle>Upload Property Data (Optional)</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    Upload Property Data (Optional)
+                  </CardTitle>
                   <CardDescription>Manually upload CSV or let the backend scrape automatically</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -722,12 +745,13 @@ const Competitors = () => {
                       className="cursor-pointer"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2, Currency
+                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2
                     </p>
                   </div>
 
                   {isUploadingProperty && (
-                    <div className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       Uploading and processing...
                     </div>
                   )}
@@ -774,7 +798,10 @@ const Competitors = () => {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Upload Competitor Data (Optional)</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    Upload Competitor Data (Optional)
+                  </CardTitle>
                   <CardDescription>Manually upload CSV or let the backend scrape automatically</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -805,12 +832,13 @@ const Competitors = () => {
                       className="cursor-pointer"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2, Currency
+                      Expected format: Date, Room_A1, Price_A1, Room_A2, Price_A2
                     </p>
                   </div>
 
                   {isUploadingCompetitor && (
-                    <div className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       Uploading and processing...
                     </div>
                   )}

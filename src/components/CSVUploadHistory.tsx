@@ -186,9 +186,11 @@ export const CSVUploadHistory = ({ propertyId, competitorId, entityName }: CSVUp
                 <div className="flex items-center gap-3 flex-1">
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{upload.file_name}</p>
+                    <p className="text-sm font-medium">
+                      {format(new Date(upload.uploaded_at), 'MMM dd, yyyy')}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {format(new Date(upload.uploaded_at), 'MMM dd, yyyy HH:mm')} · {upload.record_count} rates
+                      {format(new Date(upload.uploaded_at), 'HH:mm')} · {upload.record_count} rates
                     </p>
                   </div>
                 </div>
