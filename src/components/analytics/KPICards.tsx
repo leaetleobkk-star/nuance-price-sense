@@ -10,11 +10,10 @@ interface KPICardProps {
   subtitle?: string;
   stlyChange: number;
   lyChange: number;
-  forecastVsBudgetChange: number;
   budgetChange: number;
 }
 
-const KPICard = ({ title, value, subtitle, stlyChange, lyChange, forecastVsBudgetChange, budgetChange }: KPICardProps) => {
+const KPICard = ({ title, value, subtitle, stlyChange, lyChange, budgetChange }: KPICardProps) => {
   const isPositive = stlyChange > 0;
   
   return (
@@ -40,13 +39,6 @@ const KPICard = ({ title, value, subtitle, stlyChange, lyChange, forecastVsBudge
                 <div className={`flex items-center gap-0.5 ${stlyChange < 0 ? 'text-destructive' : 'text-green-600'}`}>
                   {stlyChange < 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
                   <span className="font-medium">{Math.abs(stlyChange)}%</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-muted-foreground">Fcst vs Bdgt</span>
-                <div className={`flex items-center gap-0.5 ${forecastVsBudgetChange < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  {forecastVsBudgetChange < 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
-                  <span className="font-medium">{Math.abs(forecastVsBudgetChange)}%</span>
                 </div>
               </div>
             </div>
@@ -110,7 +102,6 @@ export const KPICards = () => {
           value: `$${totals.revenue.toLocaleString()}`,
           stlyChange: 12.5,
           lyChange: 8.3,
-          forecastVsBudgetChange: 2.8,
           budgetChange: -1.2,
         },
         {
@@ -119,7 +110,6 @@ export const KPICards = () => {
           subtitle: "Physical",
           stlyChange: 5.2,
           lyChange: 3.7,
-          forecastVsBudgetChange: 1.5,
           budgetChange: 0.8,
         },
         {
@@ -127,7 +117,6 @@ export const KPICards = () => {
           value: `$${(totals.adr / totals.count).toFixed(0)}`,
           stlyChange: 8.1,
           lyChange: 6.4,
-          forecastVsBudgetChange: 3.2,
           budgetChange: 1.9,
         },
         {
@@ -135,7 +124,6 @@ export const KPICards = () => {
           value: `$${(totals.revpar / totals.count).toFixed(0)}`,
           stlyChange: 15.3,
           lyChange: 10.2,
-          forecastVsBudgetChange: -2.1,
           budgetChange: 3.2,
         }
       ];

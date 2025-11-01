@@ -30,7 +30,6 @@ export const RevenuePerformanceChart = () => {
         .map(([period, revenue]) => ({
           month: new Date(period + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
           revenue,
-          forecast: revenue * 1.05, // Mock forecast
           budget: revenue * 1.1, // Mock budget
         }))
         .slice(-12); // Last 12 months
@@ -109,15 +108,6 @@ export const RevenuePerformanceChart = () => {
               <Bar dataKey="revenue" fill="hsl(var(--chart-1))" name="Revenue" />
               <Line
                 type="monotone" 
-                dataKey="forecast" 
-                stroke="hsl(var(--chart-4))" 
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                name="AI Forecast"
-                dot={false}
-              />
-              <Line 
-                type="monotone" 
                 dataKey="budget" 
                 stroke="hsl(var(--chart-5))" 
                 strokeWidth={2}
@@ -130,7 +120,7 @@ export const RevenuePerformanceChart = () => {
         </div>
         
         <p className="text-xs text-muted-foreground text-center">
-          *Budget & Forecast values represent Overnight Accommodation Revenue only.
+          *Budget values represent Overnight Accommodation Revenue only.
         </p>
       </div>
     </Card>

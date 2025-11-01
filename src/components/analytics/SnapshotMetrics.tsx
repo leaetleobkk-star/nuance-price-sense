@@ -15,8 +15,8 @@ const mockOccupancyData = Array.from({ length: 31 }, (_, i) => ({
   sply: 50 + Math.random() * 2,
 }));
 
-const GaugeCard = ({ title, value, subtitle, forecast, budget, sply, lya }: any) => {
-  const percentage = (value / forecast) * 100;
+const GaugeCard = ({ title, value, subtitle, budget, sply, lya }: any) => {
+  const percentage = (parseFloat(value) / budget) * 100;
   
   return (
     <Card className="p-4">
@@ -52,22 +52,18 @@ const GaugeCard = ({ title, value, subtitle, forecast, budget, sply, lya }: any)
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="space-y-1">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Forecast</span>
-              <span className="font-medium text-chart-4">{forecast}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">SPLY</span>
-              <span className="font-medium text-chart-1">{sply}</span>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between">
               <span className="text-muted-foreground">Budget</span>
               <span className="font-medium text-chart-5">{budget}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">LYA</span>
               <span className="font-medium text-chart-3">{lya}</span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">SPLY</span>
+              <span className="font-medium text-chart-1">{sply}</span>
             </div>
           </div>
         </div>
@@ -152,14 +148,13 @@ export const SnapshotMetrics = () => {
       {/* Revenue vs Budget Gauge */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-medium">Revenue vs Budget & Forecast</h3>
+          <h3 className="text-sm font-medium">Revenue vs Budget</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <GaugeCard
             title="Occupancy"
             value={`${metrics?.occupancy || 0}%`}
             subtitle="Occupancy Rate"
-            forecast={parseFloat(metrics?.occupancy || '0') * 1.02}
             budget={parseFloat(metrics?.occupancy || '0') * 1.05}
             sply={parseFloat(metrics?.occupancy || '0') * 0.95}
             lya={parseFloat(metrics?.occupancy || '0') * 0.93}
@@ -168,7 +163,6 @@ export const SnapshotMetrics = () => {
             title="ADR"
             value={`$${metrics?.adr || 0}`}
             subtitle="Average Daily Rate"
-            forecast={parseFloat(metrics?.adr || '0') * 1.02}
             budget={parseFloat(metrics?.adr || '0') * 1.05}
             sply={parseFloat(metrics?.adr || '0') * 0.92}
             lya={parseFloat(metrics?.adr || '0') * 0.90}
@@ -177,7 +171,6 @@ export const SnapshotMetrics = () => {
             title="RevPAR"
             value={`$${metrics?.revpar || 0}`}
             subtitle="Revenue per Available Room"
-            forecast={parseFloat(metrics?.revpar || '0') * 1.02}
             budget={parseFloat(metrics?.revpar || '0') * 1.05}
             sply={parseFloat(metrics?.revpar || '0') * 0.88}
             lya={parseFloat(metrics?.revpar || '0') * 0.85}
@@ -186,7 +179,6 @@ export const SnapshotMetrics = () => {
             title="Revenue"
             value={`$${parseInt(metrics?.revenue || '0').toLocaleString()}`}
             subtitle="Total Revenue"
-            forecast={parseInt(metrics?.revenue || '0') * 1.02}
             budget={parseInt(metrics?.revenue || '0') * 1.05}
             sply={parseInt(metrics?.revenue || '0') * 0.88}
             lya={parseInt(metrics?.revenue || '0') * 0.85}
