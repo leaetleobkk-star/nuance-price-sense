@@ -19,6 +19,8 @@ export default function Properties() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [editingProperty, setEditingProperty] = useState<string | null>(null);
   const [newProperty, setNewProperty] = useState({ name: "", booking_url: "" });
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [selectedPMS, setSelectedPMS] = useState<string>("");
   const [lhEmail, setLhEmail] = useState("");
   const [lhPassword, setLhPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
@@ -345,30 +347,64 @@ export default function Properties() {
 
           <div className="grid gap-4 md:grid-cols-2 mb-4">
             <div>
-              <label className="mb-1 block text-sm font-medium">Little Hotelier Email</label>
-              <Input
-                type="email"
-                placeholder="your-email@example.com"
-                value={lhEmail}
-                onChange={(e) => setLhEmail(e.target.value)}
+              <label className="mb-1 block text-sm font-medium">Select Property</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={selectedPropertyId}
+                onChange={(e) => setSelectedPropertyId(e.target.value)}
                 disabled={isUpdating}
-              />
+              >
+                <option value="">Select a property...</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium">Little Hotelier Password</label>
-              <Input
-                type="password"
-                placeholder="Your password"
-                value={lhPassword}
-                onChange={(e) => setLhPassword(e.target.value)}
-                disabled={isUpdating}
-              />
+              <label className="mb-1 block text-sm font-medium">PMS Type</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={selectedPMS}
+                onChange={(e) => setSelectedPMS(e.target.value)}
+                disabled={isUpdating || !selectedPropertyId}
+              >
+                <option value="">Select PMS type...</option>
+                <option value="little-hotelier">Little Hotelier</option>
+                <option value="na">N/A</option>
+              </select>
             </div>
           </div>
 
+          {selectedPMS === "little-hotelier" && (
+            <div className="grid gap-4 md:grid-cols-2 mb-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Little Hotelier Email</label>
+                <Input
+                  type="email"
+                  placeholder="your-email@example.com"
+                  value={lhEmail}
+                  onChange={(e) => setLhEmail(e.target.value)}
+                  disabled={isUpdating}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Little Hotelier Password</label>
+                <Input
+                  type="password"
+                  placeholder="Your password"
+                  value={lhPassword}
+                  onChange={(e) => setLhPassword(e.target.value)}
+                  disabled={isUpdating}
+                />
+              </div>
+            </div>
+          )}
+
           <Button 
             onClick={handleUpdateLittleHotelier}
-            disabled={isUpdating || !lhEmail || !lhPassword}
+            disabled={isUpdating || !selectedPropertyId || selectedPMS !== "little-hotelier" || !lhEmail || !lhPassword}
             className="w-full mb-4"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${isUpdating ? "animate-spin" : ""}`} />
