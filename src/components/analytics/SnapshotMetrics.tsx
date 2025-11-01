@@ -2,9 +2,6 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart } from 'recharts';
-import { useQuery } from "@tanstack/react-query";
-import { biSupabase } from "@/integrations/bi-supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const mockOccupancyData = Array.from({ length: 31 }, (_, i) => ({
   date: `Oct ${String(i + 1).padStart(2, '0')}`,
@@ -72,46 +69,37 @@ const GaugeCard = ({ title, value, subtitle, budget, sply, lya }: any) => {
   );
 };
 
-export const SnapshotMetrics = () => {
-  const { data: metrics, isLoading } = useQuery({
-    queryKey: ['bi-snapshot-metrics'],
-    queryFn: async () => {
-      const currentDate = new Date();
-      const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await biSupabase
-        .from('lh_room_types')
-        .select('revenue, occupancy, adr, revpar, room_type')
-        .eq('property_id', 'property_1')
-        .eq('period', period);
-
-      if (error) throw error;
-      if (!data || data.length === 0) return null;
-
-      const totals = data.reduce((acc, row) => ({
-        revenue: acc.revenue + (row.revenue || 0),
-        occupancy: acc.occupancy + (row.occupancy || 0),
-        adr: acc.adr + (row.adr || 0),
-        revpar: acc.revpar + (row.revpar || 0),
-        count: acc.count + 1,
-      }), { revenue: 0, occupancy: 0, adr: 0, revpar: 0, count: 0 });
-
-      return {
-        occupancy: (totals.occupancy / totals.count).toFixed(1),
-        adr: (totals.adr / totals.count).toFixed(1),
-        revpar: (totals.revpar / totals.count).toFixed(1),
-        revenue: totals.revenue.toFixed(0),
+interface SnapshotMetricsProps {
+  data?: {
+    summary: {
+      kpis: {
+        revenue: number;
+        occupancy: number;
+        adr: number;
+        revpar: number;
       };
-    },
-  });
+    };
+    monthly_trend: {
+      trend_data: Array<{
+        period: string;
+        revenue: number;
+        occupancy: number;
+        adr: number;
+        nights: number;
+      }>;
+    };
+  };
+}
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-[300px] w-full" />
-      </div>
-    );
-  }
+export const SnapshotMetrics = ({ data }: SnapshotMetricsProps) => {
+  if (!data) return null;
+
+  const metrics = {
+    occupancy: data.summary.kpis.occupancy.toFixed(1),
+    adr: data.summary.kpis.adr.toFixed(1),
+    revpar: data.summary.kpis.revpar.toFixed(1),
+    revenue: data.summary.kpis.revenue.toFixed(0),
+  };
 
   return (
     <div className="space-y-6">
@@ -153,35 +141,35 @@ export const SnapshotMetrics = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <GaugeCard
             title="Occupancy"
-            value={`${metrics?.occupancy || 0}%`}
+            value={`${metrics.occupancy}%`}
             subtitle="Occupancy Rate"
-            budget={parseFloat(metrics?.occupancy || '0') * 1.05}
-            sply={parseFloat(metrics?.occupancy || '0') * 0.95}
-            lya={parseFloat(metrics?.occupancy || '0') * 0.93}
+            budget={parseFloat(metrics.occupancy) * 1.05}
+            sply={parseFloat(metrics.occupancy) * 0.95}
+            lya={parseFloat(metrics.occupancy) * 0.93}
           />
           <GaugeCard
             title="ADR"
-            value={`$${metrics?.adr || 0}`}
+            value={`$${metrics.adr}`}
             subtitle="Average Daily Rate"
-            budget={parseFloat(metrics?.adr || '0') * 1.05}
-            sply={parseFloat(metrics?.adr || '0') * 0.92}
-            lya={parseFloat(metrics?.adr || '0') * 0.90}
+            budget={parseFloat(metrics.adr) * 1.05}
+            sply={parseFloat(metrics.adr) * 0.92}
+            lya={parseFloat(metrics.adr) * 0.90}
           />
           <GaugeCard
             title="RevPAR"
-            value={`$${metrics?.revpar || 0}`}
+            value={`$${metrics.revpar}`}
             subtitle="Revenue per Available Room"
-            budget={parseFloat(metrics?.revpar || '0') * 1.05}
-            sply={parseFloat(metrics?.revpar || '0') * 0.88}
-            lya={parseFloat(metrics?.revpar || '0') * 0.85}
+            budget={parseFloat(metrics.revpar) * 1.05}
+            sply={parseFloat(metrics.revpar) * 0.88}
+            lya={parseFloat(metrics.revpar) * 0.85}
           />
           <GaugeCard
             title="Revenue"
-            value={`$${parseInt(metrics?.revenue || '0').toLocaleString()}`}
+            value={`$${parseInt(metrics.revenue).toLocaleString()}`}
             subtitle="Total Revenue"
-            budget={parseInt(metrics?.revenue || '0') * 1.05}
-            sply={parseInt(metrics?.revenue || '0') * 0.88}
-            lya={parseInt(metrics?.revenue || '0') * 0.85}
+            budget={parseInt(metrics.revenue) * 1.05}
+            sply={parseInt(metrics.revenue) * 0.88}
+            lya={parseInt(metrics.revenue) * 0.85}
           />
         </div>
       </Card>
@@ -203,7 +191,7 @@ export const SnapshotMetrics = () => {
           
           <div className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={mockOccupancyData}>
+              <ComposedChart data={data.monthly_trend.trend_data}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="date"

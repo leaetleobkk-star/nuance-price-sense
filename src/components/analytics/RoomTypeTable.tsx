@@ -1,35 +1,22 @@
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useQuery } from "@tanstack/react-query";
-import { biSupabase } from "@/integrations/bi-supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 
-export const RoomTypeTable = () => {
-  const { data: roomTypes, isLoading } = useQuery({
-    queryKey: ['bi-room-types'],
-    queryFn: async () => {
-      const currentDate = new Date();
-      const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await biSupabase
-        .from('lh_room_types')
-        .select('*')
-        .eq('property_id', 'property_1')
-        .eq('period', period)
-        .order('revenue', { ascending: false });
+interface RoomTypeTableProps {
+  data?: {
+    room_types: Array<{
+      room_type: string;
+      revenue: number;
+      reservations: number;
+      nights: number;
+      occupancy: number;
+      adr: number;
+      revpar: number;
+    }>;
+  };
+}
 
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <Card className="p-6">
-        <Skeleton className="h-[300px] w-full" />
-      </Card>
-    );
-  }
+export const RoomTypeTable = ({ data }: RoomTypeTableProps) => {
+  if (!data) return null;
 
   const getOccupancyColor = (occupancy: number) => {
     if (occupancy >= 80) return "text-green-600 dark:text-green-400";
@@ -56,7 +43,7 @@ export const RoomTypeTable = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roomTypes?.map((room, index) => (
+              {data.room_types.map((room, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium">{room.room_type || 'Unknown'}</TableCell>
                   <TableCell className="text-right">${room.revenue?.toLocaleString() || 0}</TableCell>
@@ -73,7 +60,7 @@ export const RoomTypeTable = () => {
           </Table>
         </div>
         
-        {(!roomTypes || roomTypes.length === 0) && (
+        {(!data.room_types || data.room_types.length === 0) && (
           <p className="text-center text-muted-foreground py-8">
             No room type data available for the current period
           </p>

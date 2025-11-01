@@ -1,8 +1,5 @@
 import { Card } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { useQuery } from "@tanstack/react-query";
-import { biSupabase } from "@/integrations/bi-supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -12,39 +9,26 @@ const COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-export const ChannelMixChart = () => {
-  const { data: chartData, isLoading } = useQuery({
-    queryKey: ['bi-channel-mix'],
-    queryFn: async () => {
-      const currentDate = new Date();
-      const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await biSupabase
-        .from('lh_channels')
-        .select('*')
-        .eq('property_id', 'property_1')
-        .eq('period', period)
-        .order('revenue', { ascending: false });
+interface ChannelMixChartProps {
+  data?: {
+    channels: Array<{
+      channel: string;
+      revenue: number;
+      reservations: number;
+    }>;
+  };
+}
 
-      if (error) throw error;
+export const ChannelMixChart = ({ data }: ChannelMixChartProps) => {
+  if (!data) return null;
 
-      return (data || []).map(channel => ({
-        name: channel.channel_name || 'Unknown',
-        value: channel.revenue || 0,
-        reservations: channel.reservations || 0,
-      }));
-    },
-  });
+  const chartData = data.channels.map(item => ({
+    name: item.channel || 'Unknown',
+    value: item.revenue || 0,
+    reservations: item.reservations || 0,
+  }));
 
-  if (isLoading) {
-    return (
-      <Card className="p-6">
-        <Skeleton className="h-[350px] w-full" />
-      </Card>
-    );
-  }
-
-  const totalRevenue = chartData?.reduce((sum, item) => sum + item.value, 0) || 0;
+  const totalRevenue = chartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
     <Card className="p-6">

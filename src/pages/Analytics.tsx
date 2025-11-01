@@ -17,13 +17,16 @@ import { PickupAnalysis } from "@/components/analytics/PickupAnalysis";
 import { OccupancyChart } from "@/components/analytics/OccupancyChart";
 import { RoomTypeTable } from "@/components/analytics/RoomTypeTable";
 import { ChannelMixChart } from "@/components/analytics/ChannelMixChart";
+import { useCompleteAnalytics } from "@/hooks/useCompleteAnalytics";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(2025, 4, 1),
     to: new Date(2026, 3, 30),
   });
-  const [selectedProperty, setSelectedProperty] = useState<string>("all");
+  const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
 
   const { data: properties } = useQuery({
     queryKey: ['bi-properties'],
@@ -36,9 +39,18 @@ export default function Analytics() {
       if (error) throw error;
       
       const uniqueProperties = Array.from(new Set(data.map(d => d.property_id)));
+      
+      // Set first property as default
+      if (!selectedProperty && uniqueProperties.length > 0) {
+        setSelectedProperty(uniqueProperties[0]);
+      }
+      
       return uniqueProperties;
     },
   });
+
+  // Fetch all dashboard data in one call
+  const { data: dashboardData, isLoading } = useCompleteAnalytics(selectedProperty, selectedPeriod);
 
   return (
     <div className="min-h-screen bg-background">
@@ -83,12 +95,11 @@ export default function Analytics() {
                 </PopoverContent>
               </Popover>
               
-              <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+              <Select value={selectedProperty || ""} onValueChange={setSelectedProperty}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Select property" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Properties</SelectItem>
                   {properties?.map((propId) => (
                     <SelectItem key={propId} value={propId}>
                       {propId}
@@ -103,31 +114,38 @@ export default function Analytics() {
 
       {/* Main Content */}
       <div className="p-6">
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="snapshot">Snapshot</TabsTrigger>
-            <TabsTrigger value="pickup">Pickup Analysis</TabsTrigger>
-          </TabsList>
+        {isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : (
+          <Tabs defaultValue="overview" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="snapshot">Snapshot</TabsTrigger>
+              <TabsTrigger value="pickup">Pickup Analysis</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
-            <KPICards />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <RevenuePerformanceChart />
-              <ChannelMixChart />
-            </div>
-            <OccupancyChart />
-            <RoomTypeTable />
-          </TabsContent>
+            <TabsContent value="overview" className="space-y-6">
+              <KPICards data={dashboardData?.summary} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <RevenuePerformanceChart data={dashboardData?.monthly_trend} />
+                <ChannelMixChart data={dashboardData?.channels} />
+              </div>
+              <OccupancyChart data={dashboardData?.monthly_trend} />
+              <RoomTypeTable data={dashboardData?.room_types} />
+            </TabsContent>
 
-          <TabsContent value="snapshot" className="space-y-6">
-            <SnapshotMetrics />
-          </TabsContent>
+            <TabsContent value="snapshot" className="space-y-6">
+              <SnapshotMetrics data={dashboardData} />
+            </TabsContent>
 
-          <TabsContent value="pickup" className="space-y-6">
-            <PickupAnalysis />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="pickup" className="space-y-6">
+              <PickupAnalysis />
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </div>
   );

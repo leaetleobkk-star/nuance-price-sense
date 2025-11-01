@@ -1,50 +1,26 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { useQuery } from "@tanstack/react-query";
-import { biSupabase } from "@/integrations/bi-supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 
-export const OccupancyChart = () => {
-  const { data: chartData, isLoading } = useQuery({
-    queryKey: ['bi-occupancy-trend'],
-    queryFn: async () => {
-      const { data, error } = await biSupabase
-        .from('lh_room_types')
-        .select('period, occupancy, adr, room_type')
-        .eq('property_id', 'property_1')
-        .order('period');
+interface OccupancyChartProps {
+  data?: {
+    trend_data: Array<{
+      period: string;
+      revenue: number;
+      occupancy: number;
+      adr: number;
+      nights: number;
+    }>;
+  };
+}
 
-      if (error) throw error;
+export const OccupancyChart = ({ data }: OccupancyChartProps) => {
+  if (!data) return null;
 
-      // Group by period
-      const periodMap = new Map();
-      data.forEach(row => {
-        const key = row.period;
-        const existing = periodMap.get(key) || { occupancy: 0, adr: 0, count: 0 };
-        periodMap.set(key, {
-          occupancy: existing.occupancy + (row.occupancy || 0),
-          adr: existing.adr + (row.adr || 0),
-          count: existing.count + 1,
-        });
-      });
-
-      return Array.from(periodMap.entries())
-        .map(([period, data]) => ({
-          date: new Date(period + '-01').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          occupancy: data.occupancy / data.count,
-          avgRate: data.adr / data.count,
-        }))
-        .slice(-12);
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <Card className="p-6">
-        <Skeleton className="h-[350px] w-full" />
-      </Card>
-    );
-  }
+  const chartData = data.trend_data.map(item => ({
+    date: new Date(item.period + '-01').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    occupancy: item.occupancy,
+    avgRate: item.adr,
+  }));
 
   return (
     <Card className="p-6">
@@ -56,7 +32,7 @@ export const OccupancyChart = () => {
         
         <div className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData || []}>
+            <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis 
                 dataKey="date"

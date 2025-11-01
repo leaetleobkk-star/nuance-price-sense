@@ -1,8 +1,5 @@
 import { Card } from "@/components/ui/card";
 import { TrendingDown, TrendingUp, ArrowRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { biSupabase } from "@/integrations/bi-supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface KPICardProps {
   title: string;
@@ -66,92 +63,64 @@ const KPICard = ({ title, value, subtitle, stlyChange, lyChange, budgetChange }:
   );
 };
 
-export const KPICards = () => {
-  const { data: kpis, isLoading } = useQuery({
-    queryKey: ['bi-kpi-data'],
-    queryFn: async () => {
-      const currentDate = new Date();
-      const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await biSupabase
-        .from('lh_room_types')
-        .select('revenue, occupancy, adr, revpar')
-        .eq('property_id', 'property_1')
-        .eq('period', period);
+interface KPICardsProps {
+  data?: {
+    kpis: {
+      revenue: number;
+      occupancy: number;
+      adr: number;
+      revpar: number;
+      reservations: number;
+      nights: number;
+      stly_change?: number;
+      ly_change?: number;
+      budget_change?: number;
+    };
+  };
+}
 
-      if (error) throw error;
-      if (!data || data.length === 0) return [];
+export const KPICards = ({ data }: KPICardsProps) => {
+  if (!data) return null;
 
-      const totals = data.reduce<{
-        revenue: number;
-        occupancy: number;
-        adr: number;
-        revpar: number;
-        count: number;
-      }>((acc, row) => ({
-        revenue: acc.revenue + (row.revenue || 0),
-        occupancy: acc.occupancy + (row.occupancy || 0),
-        adr: acc.adr + (row.adr || 0),
-        revpar: acc.revpar + (row.revpar || 0),
-        count: acc.count + 1,
-      }), { revenue: 0, occupancy: 0, adr: 0, revpar: 0, count: 0 });
+  const { kpis } = data;
 
-      return [
-        {
-          title: "Revenue",
-          value: `$${totals.revenue.toLocaleString()}`,
-          stlyChange: 12.5,
-          lyChange: 8.3,
-          budgetChange: -1.2,
-        },
-        {
-          title: "Occupancy",
-          value: `${(totals.occupancy / totals.count).toFixed(1)}%`,
-          subtitle: "Physical",
-          stlyChange: 5.2,
-          lyChange: 3.7,
-          budgetChange: 0.8,
-        },
-        {
-          title: "ADR",
-          value: `$${(totals.adr / totals.count).toFixed(0)}`,
-          stlyChange: 8.1,
-          lyChange: 6.4,
-          budgetChange: 1.9,
-        },
-        {
-          title: "RevPAR",
-          value: `$${(totals.revpar / totals.count).toFixed(0)}`,
-          stlyChange: 15.3,
-          lyChange: 10.2,
-          budgetChange: 3.2,
-        }
-      ];
+  const kpiData = [
+    {
+      title: "Revenue",
+      value: `$${kpis.revenue.toLocaleString()}`,
+      stlyChange: kpis.stly_change || 12.5,
+      lyChange: kpis.ly_change || 8.3,
+      budgetChange: kpis.budget_change || -1.2,
     },
-  });
-
-  if (isLoading) {
-    return (
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Portfolio Summary</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="p-4">
-              <Skeleton className="h-4 w-24 mb-4" />
-              <Skeleton className="h-8 w-32 mb-2" />
-              <Skeleton className="h-3 w-20" />
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
+    {
+      title: "Occupancy",
+      value: `${kpis.occupancy.toFixed(1)}%`,
+      subtitle: "Physical",
+      stlyChange: kpis.stly_change || 5.2,
+      lyChange: kpis.ly_change || 3.7,
+      budgetChange: kpis.budget_change || 0.8,
+    },
+    {
+      title: "ADR",
+      value: `$${kpis.adr.toFixed(0)}`,
+      stlyChange: kpis.stly_change || 8.1,
+      lyChange: kpis.ly_change || 6.4,
+      budgetChange: kpis.budget_change || 1.9,
+    },
+    {
+      title: "RevPAR",
+      value: `$${kpis.revpar.toFixed(0)}`,
+      stlyChange: kpis.stly_change || 15.3,
+      lyChange: kpis.ly_change || 10.2,
+      budgetChange: kpis.budget_change || 3.2,
+    }
+  ];
 
   return (
     <div>
       <h2 className="text-lg font-semibold mb-4">Portfolio Summary</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi, index) => (
+        {kpiData.map((kpi, index) => (
           <KPICard key={index} {...kpi} />
         ))}
       </div>

@@ -2,47 +2,27 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { useQuery } from "@tanstack/react-query";
-import { biSupabase } from "@/integrations/bi-supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 
-export const RevenuePerformanceChart = () => {
-  const { data: chartData, isLoading } = useQuery({
-    queryKey: ['bi-revenue-trend'],
-    queryFn: async () => {
-      const { data, error } = await biSupabase
-        .from('lh_room_types')
-        .select('period, revenue, room_type')
-        .eq('property_id', 'property_1')
-        .order('period');
+interface RevenuePerformanceChartProps {
+  data?: {
+    trend_data: Array<{
+      period: string;
+      revenue: number;
+      occupancy: number;
+      adr: number;
+      nights: number;
+    }>;
+  };
+}
 
-      if (error) throw error;
+export const RevenuePerformanceChart = ({ data }: RevenuePerformanceChartProps) => {
+  if (!data) return null;
 
-      // Group by period and sum revenue
-      const periodMap = new Map();
-      data.forEach(row => {
-        const existing = periodMap.get(row.period) || 0;
-        periodMap.set(row.period, existing + (row.revenue || 0));
-      });
-
-      // Convert to chart format
-      return Array.from(periodMap.entries())
-        .map(([period, revenue]) => ({
-          month: new Date(period + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-          revenue,
-          budget: revenue * 1.1, // Mock budget
-        }))
-        .slice(-12); // Last 12 months
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <Card className="p-6">
-        <Skeleton className="h-[400px] w-full" />
-      </Card>
-    );
-  }
+  const chartData = data.trend_data.map(item => ({
+    month: new Date(item.period + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+    revenue: item.revenue,
+    budget: item.revenue * 1.1,
+  }));
 
   return (
     <Card className="p-6">
@@ -84,7 +64,7 @@ export const RevenuePerformanceChart = () => {
         
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis 
                 dataKey="month" 
