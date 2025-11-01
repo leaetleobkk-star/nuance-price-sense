@@ -83,22 +83,9 @@ let q = admin
       const { data: rates, error } = await q
       if (error || !rates || rates.length === 0) return { created: false, count: 0 }
 
-      // Keep the cheapest price per check_in_date
-      const byDate = new Map<string, any>()
-      for (const r of rates) {
-        const key = r.check_in_date as string
-        const current = byDate.get(key)
-        if (!current || Number(r.price_amount) < Number(current.price_amount)) {
-          byDate.set(key, r)
-        }
-      }
-
+      // Include all scraped rows within the window (no de-duplication)
       const header = 'Date,Room,Price,Adults,Currency'
-      const sortedDates = Array.from(byDate.keys()).sort()
-      const rows = sortedDates.map((d) => {
-        const r = byDate.get(d)
-        return `${r.check_in_date},${r.room_type || 'N/A'},${r.price_amount},${r.adults || 2},${r.currency || 'THB'}`
-      })
+      const rows = (rates as any[]).map((r) => `${r.check_in_date},${r.room_type || 'N/A'},${r.price_amount},${r.adults || 2},${r.currency || 'THB'}`)
       const csv = [header, ...rows].join('\n')
 
       const ts = new Date().toISOString().replace(/[:.]/g, '-')
@@ -120,10 +107,10 @@ await admin.from('csv_uploads').insert({
         competitor_id: filter.competitor_id || null,
         file_name: fileName,
         file_path: filePath,
-        record_count: sortedDates.length,
+        record_count: rates.length,
       })
 
-      return { created: true, count: sortedDates.length }
+      return { created: true, count: rates.length }
     }
 
     const results: any = { property: null, competitors: {} }

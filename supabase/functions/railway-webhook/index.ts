@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
         console.log(`✅ Inserted ${insertedRates?.length || 0} rates into database`)
       }
 
-      // Fallback: if no explicit rates were provided but task completed, generate CSV from recent DB inserts
+      // Fallback: if no explicit rates were provided but task completed, generate CSV from existing DB data (next N days, cheapest per day)
       try {
         if ((!body.data?.rates || !Array.isArray(body.data?.rates)) && resolvedUserId && (body.data?.property_id || body.data?.competitor_id)) {
           const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -192,12 +192,21 @@ Deno.serve(async (req) => {
           if (SUPABASE_URL && SERVICE_ROLE_KEY) {
             const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
+            // Build window by check_in_date instead of scraped_at
+            const daysAhead = Number(body.data?.days_ahead) || 60;
+            const today = new Date();
+            const startStr = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().slice(0, 10);
+            const end = new Date(today);
+            end.setDate(end.getDate() + daysAhead);
+            const endStr = end.toISOString().slice(0, 10);
+
             let q = supabase
               .from('scraped_rates')
-              .select('check_in_date, room_type, price_amount, adults, currency, scraped_at')
-              .gte('scraped_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+              .select('check_in_date, room_type, price_amount, adults, currency')
+              .gte('check_in_date', startStr)
+              .lte('check_in_date', endStr)
               .order('check_in_date')
-              .order('scraped_at', { ascending: false });
+              .order('price_amount', { ascending: true });
 
             if (body.data?.property_id) {
               q = q.eq('property_id', body.data.property_id);
@@ -205,17 +214,14 @@ Deno.serve(async (req) => {
               q = q.eq('competitor_id', body.data.competitor_id);
             }
 
-            const { data: recentRates, error: recentErr } = await q;
-            if (recentErr) {
-              console.error('Failed to fetch recent rates for CSV fallback:', recentErr);
-            } else if (recentRates && recentRates.length > 0) {
-              const csvRows = ['Date,Room,Price,Adults,Currency'];
-              recentRates.forEach((rate: any) => {
-                csvRows.push(
-                  `${rate.check_in_date},${rate.room_type || 'N/A'},${rate.price_amount},${rate.adults || 2},${rate.currency || 'THB'}`
-                );
-              });
-              const csvContent = csvRows.join('\n');
+            const { data: windowRates, error: windowErr } = await q;
+            if (windowErr) {
+              console.error('Failed to fetch rates for CSV window:', windowErr);
+            } else if (windowRates && windowRates.length > 0) {
+              // Include all scraped rows within the window (no de-duplication)
+              const header = 'Date,Room,Price,Adults,Currency';
+              const rows = (windowRates as any[]).map((r) => `${r.check_in_date},${r.room_type || 'N/A'},${r.price_amount},${r.adults || 2},${r.currency || 'THB'}`);
+              const csvContent = [header, ...rows].join('\n');
 
               const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
               const entityType = body.data.property_id ? 'property' : 'competitor';
@@ -231,7 +237,7 @@ Deno.serve(async (req) => {
                 });
 
               if (uploadError2) {
-                console.error('Failed to upload fallback CSV:', uploadError2);
+                console.error('Failed to upload window CSV:', uploadError2);
               } else {
                 const { error: csvError2 } = await supabase.from('csv_uploads').insert({
                   user_id: resolvedUserId,
@@ -239,21 +245,21 @@ Deno.serve(async (req) => {
                   competitor_id: body.data.competitor_id || null,
                   file_name: fileName,
                   file_path: filePath,
-                  record_count: recentRates.length,
+                  record_count: (windowRates as any[]).length,
                 });
                 if (csvError2) {
-                  console.error('Failed to track fallback CSV upload:', csvError2);
+                  console.error('Failed to track window CSV upload:', csvError2);
                 } else {
-                  console.log(`✅ Fallback CSV generated and tracked: ${fileName}`);
+                  console.log(`✅ Window CSV generated and tracked: ${fileName}`);
                 }
               }
             } else {
-              console.log('No recent rates found for CSV fallback.');
+              console.log('No rates found for the requested window to build CSV.');
             }
           }
         }
       } catch (e) {
-        console.error('CSV fallback generation failed:', e);
+        console.error('CSV generation (window) failed:', e);
       }
 
       return new Response(JSON.stringify({ 
