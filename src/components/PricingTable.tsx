@@ -12,6 +12,7 @@ interface RateDetail {
   roomType: string | null;
   previousPrice?: number;
   percentChange?: number;
+  currency?: string;
 }
 
 interface PricingData {
@@ -49,8 +50,10 @@ const EXCHANGE_RATES: Record<string, { rate: number; symbol: string }> = {
   HKD: { rate: 0.22, symbol: 'HK$' },
 };
 
-const convertPrice = (price: number, currency: string = 'THB'): number => {
-  return price * EXCHANGE_RATES[currency].rate;
+const convertPrice = (price: number, fromCurrency: string = 'THB', toCurrency: string = 'THB'): number => {
+  // First convert to THB (base currency), then to target currency
+  const priceInTHB = price / (EXCHANGE_RATES[fromCurrency]?.rate || 1);
+  return priceInTHB * (EXCHANGE_RATES[toCurrency]?.rate || 1);
 };
 
 const getCurrencySymbol = (currency: string = 'THB'): string => {
@@ -208,6 +211,7 @@ for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
               roomType: rate.room_type,
               previousPrice,
               percentChange,
+              currency: rate.currency || 'THB',
             };
           } else {
             competitorPrices[comp.id] = {
@@ -231,6 +235,7 @@ for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             roomType: myRate.room_type,
             previousPrice,
             percentChange,
+            currency: myRate.currency || 'THB',
           };
         } else {
           myPropertyDetail = {
@@ -285,13 +290,16 @@ for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const hasHistoricalData = detail.previousPrice !== undefined;
     const hasSignificantChange = hasHistoricalData && detail.percentChange && Math.abs(detail.percentChange) >= 10;
 
+    const storedCurrency = detail.currency || 'THB';
+    const convertedPrice = convertPrice(detail.price, storedCurrency, currency);
+    
     const priceContent = (
       <div className="flex items-center gap-1.5">
         <span className={cn(
           "text-xs font-medium",
           isMyProperty ? "font-semibold text-orange-600 dark:text-orange-400" : getPriceClass(detail.price, myPropertyPrice)
         )}>
-          {getCurrencySymbol(currency)} {convertPrice(detail.price, currency).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+          {getCurrencySymbol(currency)} {convertedPrice.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
         </span>
         {!isMyProperty && detail.price > myPropertyPrice && (
           <TrendingUp className="h-2.5 w-2.5 text-destructive" />
