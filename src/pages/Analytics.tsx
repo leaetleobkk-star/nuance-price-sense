@@ -19,6 +19,8 @@ import { RoomTypeTable } from "@/components/analytics/RoomTypeTable";
 import { ChannelMixChart } from "@/components/analytics/ChannelMixChart";
 import { useCompleteAnalytics } from "@/hooks/useCompleteAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RefreshLHData } from "@/components/RefreshLHData";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -27,6 +29,24 @@ export default function Analytics() {
   });
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
+  const [lovablePropertyId, setLovablePropertyId] = useState<string | null>(null);
+
+  // Get property ID from main Lovable database based on selected BI property
+  const { data: lovableProperty } = useQuery({
+    queryKey: ['lovable-property', selectedProperty],
+    enabled: !!selectedProperty,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('name', selectedProperty)
+        .maybeSingle();
+      
+      if (error) throw error;
+      if (data) setLovablePropertyId(data.id);
+      return data;
+    },
+  });
 
   const { data: properties } = useQuery({
     queryKey: ['bi-properties'],
@@ -114,6 +134,12 @@ export default function Analytics() {
 
       {/* Main Content */}
       <div className="p-6">
+        {lovablePropertyId && (
+          <div className="mb-6">
+            <RefreshLHData propertyId={lovablePropertyId} />
+          </div>
+        )}
+        
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-32 w-full" />

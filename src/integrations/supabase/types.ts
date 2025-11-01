@@ -102,7 +102,10 @@ export type Database = {
           booking_url: string | null
           created_at: string
           id: string
+          lh_email: string | null
+          lh_password: string | null
           name: string
+          pms_type: string | null
           updated_at: string
           user_id: string
         }
@@ -110,7 +113,10 @@ export type Database = {
           booking_url?: string | null
           created_at?: string
           id?: string
+          lh_email?: string | null
+          lh_password?: string | null
           name: string
+          pms_type?: string | null
           updated_at?: string
           user_id: string
         }
@@ -118,7 +124,10 @@ export type Database = {
           booking_url?: string | null
           created_at?: string
           id?: string
+          lh_email?: string | null
+          lh_password?: string | null
           name?: string
+          pms_type?: string | null
           updated_at?: string
           user_id?: string
         }
