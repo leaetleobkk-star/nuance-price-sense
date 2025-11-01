@@ -6,6 +6,7 @@ import { useProperty } from "@/contexts/PropertyContext";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DateRange } from "react-day-picker";
+import { format } from "date-fns";
 interface RateDetail {
   price: number | string;
   roomType: string | null;
@@ -55,6 +56,9 @@ const convertPrice = (price: number, currency: string = 'THB'): number => {
 const getCurrencySymbol = (currency: string = 'THB'): string => {
   return EXCHANGE_RATES[currency].symbol;
 };
+
+// Format date as YYYY-MM-DD without timezone shifts
+const toISODate = (d: Date) => format(d, 'yyyy-MM-dd');
 
 export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = 'THB' }: PricingTableProps) => {
   const { selectedProperty, competitors } = useProperty();
@@ -108,9 +112,9 @@ export const PricingTable = ({ dateRange, onDataLoaded, adults = 2, currency = '
       const start = new Date(dateRange.from);
       const end = new Date(dateRange.to);
       
-      for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-        dates.push(new Date(date).toISOString().split('T')[0]);
-      }
+for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  dates.push(toISODate(d));
+}
 
       // Fetch current and previous scraped rates for competitors and property, filtered by adults
       const [compRes, myRes, compPrevRes, myPrevRes] = await Promise.all([

@@ -14,11 +14,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { property_id, competitor_ids = [], hours_window = 6 } = await req.json().catch(() => ({
-      property_id: undefined,
-      competitor_ids: [],
-      hours_window: 6,
-    }))
+const { property_id, competitor_ids = [], hours_window = 6, days_ahead = 60 } = await req.json().catch(() => ({
+  property_id: undefined,
+  competitor_ids: [],
+  hours_window: 6,
+  days_ahead: 60,
+}))
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -67,10 +68,12 @@ Deno.serve(async (req) => {
 
       if (!ownerUserId) return { created: false, count: 0 }
 
-      let q = admin
+let q = admin
         .from('scraped_rates')
         .select('check_in_date, room_type, price_amount, adults, currency, scraped_at')
-        .gte('scraped_at', sinceIso)
+        // Build a window by check_in_date (next N days) and pick one rate per date
+        .gte('check_in_date', new Date().toISOString().slice(0, 10))
+        .lte('check_in_date', (() => { const d = new Date(); d.setDate(d.getDate() + Number(days_ahead)); return d.toISOString().slice(0, 10) })())
         .order('check_in_date')
         .order('scraped_at', { ascending: false })
 
@@ -80,8 +83,22 @@ Deno.serve(async (req) => {
       const { data: rates, error } = await q
       if (error || !rates || rates.length === 0) return { created: false, count: 0 }
 
+      // Keep the cheapest price per check_in_date
+      const byDate = new Map<string, any>()
+      for (const r of rates) {
+        const key = r.check_in_date as string
+        const current = byDate.get(key)
+        if (!current || Number(r.price_amount) < Number(current.price_amount)) {
+          byDate.set(key, r)
+        }
+      }
+
       const header = 'Date,Room,Price,Adults,Currency'
-      const rows = rates.map((r: any) => `${r.check_in_date},${r.room_type || 'N/A'},${r.price_amount},${r.adults || 2},${r.currency || 'THB'}`)
+      const sortedDates = Array.from(byDate.keys()).sort()
+      const rows = sortedDates.map((d) => {
+        const r = byDate.get(d)
+        return `${r.check_in_date},${r.room_type || 'N/A'},${r.price_amount},${r.adults || 2},${r.currency || 'THB'}`
+      })
       const csv = [header, ...rows].join('\n')
 
       const ts = new Date().toISOString().replace(/[:.]/g, '-')
@@ -97,16 +114,16 @@ Deno.serve(async (req) => {
         return { created: false, count: 0 }
       }
 
-      await admin.from('csv_uploads').insert({
+await admin.from('csv_uploads').insert({
         user_id: ownerUserId,
         property_id: filter.property_id || null,
         competitor_id: filter.competitor_id || null,
         file_name: fileName,
         file_path: filePath,
-        record_count: rates.length,
+        record_count: sortedDates.length,
       })
 
-      return { created: true, count: rates.length }
+      return { created: true, count: sortedDates.length }
     }
 
     const results: any = { property: null, competitors: {} }
