@@ -92,7 +92,18 @@ interface SnapshotMetricsProps {
 }
 
 export const SnapshotMetrics = ({ data }: SnapshotMetricsProps) => {
-  if (!data) return null;
+  if (!data || !data.summary || !data.summary.kpis || !data.monthly_trend?.trend_data) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Snapshot</h2>
+          <p className="text-center text-muted-foreground py-8">
+            No snapshot data available. Please refresh data from Little Hotelier.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const metrics = {
     occupancy: data.summary.kpis.occupancy.toFixed(1),
