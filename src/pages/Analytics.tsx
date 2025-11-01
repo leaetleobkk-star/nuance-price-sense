@@ -13,11 +13,13 @@ import { biSupabase } from "@/integrations/bi-supabase/client";
 import { KPICards } from "@/components/analytics/KPICards";
 import { RevenuePerformanceChart } from "@/components/analytics/RevenuePerformanceChart";
 import { SnapshotMetrics } from "@/components/analytics/SnapshotMetrics";
-import { PickupAnalysis } from "@/components/analytics/PickupAnalysis";
 import { OccupancyChart } from "@/components/analytics/OccupancyChart";
 import { RoomTypeTable } from "@/components/analytics/RoomTypeTable";
 import { ChannelMixChart } from "@/components/analytics/ChannelMixChart";
+import { DailyPerformanceChart } from "@/components/analytics/DailyPerformanceChart";
+import { WeeklyPickupComparison } from "@/components/analytics/WeeklyPickupComparison";
 import { useCompleteAnalytics } from "@/hooks/useCompleteAnalytics";
+import { useDailyPerformance, useWeeklyPickup } from "@/hooks/usePropertyAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshLHData } from "@/components/RefreshLHData";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,13 +32,13 @@ export default function Analytics() {
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
 
-  // Fetch properties from Lovable database
+  // Fetch properties from Lovable database with currency
   const { data: properties } = useQuery({
     queryKey: ['properties'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('properties')
-        .select('id, name, pms_type')
+        .select('id, name, pms_type, currency')
         .order('name');
       if (error) throw error;
       return data || [];
@@ -49,8 +51,14 @@ export default function Analytics() {
     }
   }, [properties, selectedProperty]);
 
-  // Fetch all dashboard data in one call
+  // Fetch all dashboard data
   const { data: dashboardData, isLoading } = useCompleteAnalytics(selectedProperty, selectedPeriod);
+  const { data: dailyPerformanceData } = useDailyPerformance(selectedProperty);
+  const { data: weeklyPickupData } = useWeeklyPickup(selectedProperty);
+
+  // Get current property currency
+  const currentProperty = properties?.find(p => p.id === selectedProperty);
+  const currency = currentProperty?.currency || 'USD';
 
   return (
     <div className="min-h-screen bg-background">
@@ -145,10 +153,17 @@ export default function Analytics() {
 
             <TabsContent value="snapshot" className="space-y-6">
               <SnapshotMetrics data={dashboardData} />
+              <DailyPerformanceChart 
+                data={dailyPerformanceData || []} 
+                currency={currency}
+              />
             </TabsContent>
 
             <TabsContent value="pickup" className="space-y-6">
-              <PickupAnalysis />
+              <WeeklyPickupComparison 
+                data={weeklyPickupData} 
+                currency={currency}
+              />
             </TabsContent>
           </Tabs>
         )}

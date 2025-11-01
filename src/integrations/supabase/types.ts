@@ -101,6 +101,7 @@ export type Database = {
         Row: {
           booking_url: string | null
           created_at: string
+          currency: string | null
           id: string
           lh_email: string | null
           lh_password: string | null
@@ -112,6 +113,7 @@ export type Database = {
         Insert: {
           booking_url?: string | null
           created_at?: string
+          currency?: string | null
           id?: string
           lh_email?: string | null
           lh_password?: string | null
@@ -123,6 +125,7 @@ export type Database = {
         Update: {
           booking_url?: string | null
           created_at?: string
+          currency?: string | null
           id?: string
           lh_email?: string | null
           lh_password?: string | null
