@@ -30,22 +30,9 @@ export default function Analytics() {
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
 
-  // Fetch BI properties for analytics dropdown
-  const { data: biProperties } = useQuery({
-    queryKey: ['bi-properties'],
-    queryFn: async () => {
-      const { data, error } = await biSupabase
-        .from('properties')
-        .select('property_id, property_name')
-        .order('property_name');
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  // Fetch Lovable properties for refresh functionality
-  const { data: lovableProperties } = useQuery({
-    queryKey: ['lovable-properties'],
+  // Fetch properties from Lovable database
+  const { data: properties } = useQuery({
+    queryKey: ['properties'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('properties')
@@ -57,10 +44,10 @@ export default function Analytics() {
   });
 
   useEffect(() => {
-    if (!selectedProperty && biProperties && biProperties.length > 0) {
-      setSelectedProperty(biProperties[0].property_id);
+    if (!selectedProperty && properties && properties.length > 0) {
+      setSelectedProperty(properties[0].id);
     }
-  }, [biProperties, selectedProperty]);
+  }, [properties, selectedProperty]);
 
   // Fetch all dashboard data in one call
   const { data: dashboardData, isLoading } = useCompleteAnalytics(selectedProperty, selectedPeriod);
@@ -113,9 +100,9 @@ export default function Analytics() {
                   <SelectValue placeholder="Select property" />
                 </SelectTrigger>
                 <SelectContent className="z-50 bg-background">
-                  {biProperties?.map((p: any) => (
-                    <SelectItem key={p.property_id} value={p.property_id}>
-                      {p.property_name}
+                  {properties?.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -127,9 +114,9 @@ export default function Analytics() {
 
       {/* Main Content */}
       <div className="p-6">
-        {lovableProperties && lovableProperties.length > 0 && lovableProperties[0]?.pms_type === 'little-hotelier' && (
+        {selectedProperty && properties?.find(p => p.id === selectedProperty)?.pms_type === 'little-hotelier' && (
           <div className="mb-6">
-            <RefreshLHData propertyId={lovableProperties[0].id} />
+            <RefreshLHData propertyId={selectedProperty} />
           </div>
         )}
         
