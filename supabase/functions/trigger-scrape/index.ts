@@ -122,12 +122,14 @@ Deno.serve(async (req) => {
 
     console.log('Using Railway endpoint:', finalRailwayUrl)
 
-    // Prepare data for Railway
+    // Prepare data for Railway (including LH credentials)
     const scrapePayload = {
       property: {
         id: property.id,
         name: property.name,
         booking_url: property.booking_url,
+        lh_email: property.lh_email,
+        lh_password: property.lh_password,
       },
       competitors: competitors?.map(c => ({
         id: c.id,
