@@ -29,22 +29,18 @@ export default function Analytics() {
   });
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
-  const [lovablePropertyId, setLovablePropertyId] = useState<string | null>(null);
 
-  // Get property ID from main Lovable database based on selected BI property
-  const { data: lovableProperty } = useQuery({
-    queryKey: ['lovable-property', selectedProperty],
-    enabled: !!selectedProperty,
+  // Get first property from Lovable database for refresh functionality
+  const { data: lovableProperties } = useQuery({
+    queryKey: ['lovable-properties'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('properties')
-        .select('id')
-        .eq('name', selectedProperty)
-        .maybeSingle();
+        .select('id, name, pms_type')
+        .order('name');
       
       if (error) throw error;
-      if (data) setLovablePropertyId(data.id);
-      return data;
+      return data || [];
     },
   });
 
@@ -119,7 +115,7 @@ export default function Analytics() {
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Select property" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50 bg-background">
                   {properties?.map((propId) => (
                     <SelectItem key={propId} value={propId}>
                       {propId}
@@ -134,9 +130,9 @@ export default function Analytics() {
 
       {/* Main Content */}
       <div className="p-6">
-        {lovablePropertyId && (
+        {lovableProperties && lovableProperties.length > 0 && lovableProperties[0].pms_type === 'little-hotelier' && (
           <div className="mb-6">
-            <RefreshLHData propertyId={lovablePropertyId} />
+            <RefreshLHData propertyId={lovableProperties[0].id} />
           </div>
         )}
         
