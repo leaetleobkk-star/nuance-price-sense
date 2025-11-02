@@ -44,15 +44,22 @@ interface DashboardData {
   };
 }
 
-export const useCompleteAnalytics = (propertyId: string | null, period: string | null = null) => {
+export const useCompleteAnalytics = (
+  propertyId: string | null, 
+  period: string | null = null,
+  startDate?: Date,
+  endDate?: Date
+) => {
   return useQuery({
-    queryKey: ['complete-analytics', propertyId, period],
+    queryKey: ['complete-analytics', propertyId, period, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!propertyId) return null;
 
       const { data, error } = await biSupabase.rpc('rpc_get_complete_dashboard', {
         p_property_id: propertyId,
-        p_period: period
+        p_period: period,
+        p_start_date: startDate?.toISOString().split('T')[0] || null,
+        p_end_date: endDate?.toISOString().split('T')[0] || null
       });
 
       if (error) throw error;

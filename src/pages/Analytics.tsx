@@ -51,10 +51,23 @@ export default function Analytics() {
     }
   }, [properties, selectedProperty]);
 
-  // Fetch all dashboard data
-  const { data: dashboardData, isLoading } = useCompleteAnalytics(selectedProperty, selectedPeriod);
-  const { data: dailyPerformanceData } = useDailyPerformance(selectedProperty);
-  const { data: weeklyPickupData } = useWeeklyPickup(selectedProperty);
+  // Fetch all dashboard data with date range
+  const { data: dashboardData, isLoading } = useCompleteAnalytics(
+    selectedProperty, 
+    selectedPeriod, 
+    dateRange?.from, 
+    dateRange?.to
+  );
+  const { data: dailyPerformanceData } = useDailyPerformance(
+    selectedProperty, 
+    dateRange?.from, 
+    dateRange?.to
+  );
+  const { data: weeklyPickupData } = useWeeklyPickup(
+    selectedProperty, 
+    dateRange?.from, 
+    dateRange?.to
+  );
 
   // Get current property currency
   const currentProperty = properties?.find(p => p.id === selectedProperty);

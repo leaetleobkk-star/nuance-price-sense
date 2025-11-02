@@ -26,14 +26,16 @@ export interface WeeklyPickupData {
   };
 }
 
-export const useDailyPerformance = (propertyId: string | null) => {
+export const useDailyPerformance = (propertyId: string | null, startDate?: Date, endDate?: Date) => {
   return useQuery({
-    queryKey: ['daily-performance', propertyId],
+    queryKey: ['daily-performance', propertyId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!propertyId) return null;
 
       const { data, error } = await biSupabase.rpc('rpc_get_daily_performance', {
-        p_property_id: propertyId
+        p_property_id: propertyId,
+        p_start_date: startDate?.toISOString().split('T')[0] || null,
+        p_end_date: endDate?.toISOString().split('T')[0] || null
       });
 
       if (error) throw error;
@@ -43,14 +45,16 @@ export const useDailyPerformance = (propertyId: string | null) => {
   });
 };
 
-export const useWeeklyPickup = (propertyId: string | null) => {
+export const useWeeklyPickup = (propertyId: string | null, startDate?: Date, endDate?: Date) => {
   return useQuery({
-    queryKey: ['weekly-pickup', propertyId],
+    queryKey: ['weekly-pickup', propertyId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!propertyId) return null;
 
       const { data, error } = await biSupabase.rpc('rpc_get_weekly_pickup', {
-        p_property_id: propertyId
+        p_property_id: propertyId,
+        p_start_date: startDate?.toISOString().split('T')[0] || null,
+        p_end_date: endDate?.toISOString().split('T')[0] || null
       });
 
       if (error) throw error;
